@@ -456,13 +456,13 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "boring-sidebar",
-    title: "Boring sidebar (group by project)",
+    title: "Compact sidebar",
     to: "/settings/labs",
-    searchTerms: ["beta folders project tree legacy old classic sidebar"],
+    searchTerms: ["beta compact list rows boring legacy old classic sidebar"],
   },
   {
     id: "boring-sidebar-multiline",
-    title: "Two-line folder rows",
+    title: "Two-line compact rows",
     to: "/settings/labs",
     searchTerms: ["beta boring sidebar folder rows multiline branch pull request details"],
   },

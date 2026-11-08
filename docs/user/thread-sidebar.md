@@ -6,7 +6,7 @@ need a separate branch and working directory.
 ## Start a thread
 
 On web and desktop, **New thread** opens the project picker when you have multiple
-projects in the default or project-grouped sidebar. The legacy sidebar always
+projects in the default or compact sidebar. The legacy sidebar always
 starts in the current project. **Shift-click** to start in
 the current project, or use a project's own new-thread action. A new thread carries
 your model and mode selections, unless the destination project has its own model default.
@@ -146,26 +146,28 @@ or **Settings → General → Working section** on iOS and Android. Each device 
 choice.
 
 While this is on, the active list is ordered by when each thread last came back to you, so you
-cannot drag or move threads within it. Your saved order returns when you turn it off.
+cannot manually reorder threads within it. You can still drag tasks together to group them on web
+and desktop. Your saved order returns when you turn it off.
 
-### Group threads by project (beta)
+### Group chosen tasks
 
-Turn on **Settings → Labs → Boring sidebar (group by project)** on web and desktop to put active
-threads in a folder for each project. Pinned projects come first. A project with no active
-threads has no folder unless it is pinned or you pick it in the project filter. An archived
-project's folder comes last and shows only while it has active threads. Click a folder to open or
-close it. A closed folder shows how many threads it holds, and a dot when one of them
-needs you. Use the pen button on a folder, or right-click it, to start a thread in that project.
-Use **Group threads by project** in the sidebar to switch between project groups and individual
-threads without opening Settings. Working, Snoozed, Settled, and pinned threads group by project
-within their own sections. Click a project heading to collapse or expand its tasks; each section
-remembers its own open groups. A collapsed group keeps its count and actions, and the open thread
-stays visible. The Working section still follows your **Working section** setting.
+Threads start individually. Drag a task onto the middle of another task to create a group,
+or onto a group heading to add it. Dropping near a row's top or bottom keeps the usual sort or
+status move. You can also select tasks with Command-click (Control-click on Windows/Linux),
+then choose **Group selected threads** in the sidebar or selection menu. Groups can contain
+chosen tasks from different projects; sharing a project does not group tasks automatically.
 
-Open a project group's actions to snooze or settle its listed threads together, or to unsnooze
-or unsettle them. The count in the menu is the number affected; other sections and older threads
-that have not been shown are excluded. Individual thread actions remain available.
-In project view you cannot drag threads. Each device keeps its own view choice.
+Click a group heading to collapse or expand it. Its menu can rename the group, ungroup its tasks,
+or snooze, wake, settle, and restore the group's loaded tasks across all status sections.
+The action count is the number affected, including loaded members hidden by a project filter;
+threads unavailable from disconnected environments or not loaded are excluded. Individual task
+state changes keep group membership, so one group may appear in several sections.
+
+To remove a task, use **Remove from group** in its menu or drag it to the removal area shown
+while dragging. Removing a group does not delete its tasks or change their states. Groups are
+one level deep and saved on this client; they do not sync to another browser, device, or the
+native mobile app. **Settings → Labs → Compact sidebar** changes row density without creating
+automatic project groups.
 
 ## Settle finished work
 

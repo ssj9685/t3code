@@ -32,7 +32,6 @@ import {
   type SidebarSection,
   resolveSidebarDropVerb,
   groupSidebarThreadsByProject,
-  groupSidebarShelfThreads,
   resolveSidebarFolderDot,
   sidebarFolderExpansionKeys,
 } from "./Sidebar.logic";
@@ -1628,47 +1627,5 @@ describe("shouldCreateNewThreadInCurrentProject", () => {
     expect(shouldCreateNewThreadInCurrentProject(false, 1, 3)).toBe(true);
     expect(shouldCreateNewThreadInCurrentProject(false, 0, 0)).toBe(true);
     expect(shouldCreateNewThreadInCurrentProject(true, 2, 2)).toBe(true);
-  });
-});
-
-describe("groupSidebarShelfThreads", () => {
-  it("keeps each project together in first-thread order without losing unknown projects", () => {
-    const remote = EnvironmentId.make("remote");
-    const groups = [
-      {
-        memberProjectRefs: [
-          { environmentId: localEnvironmentId, projectId: ProjectId.make("a") },
-          { environmentId: remote, projectId: ProjectId.make("a-remote") },
-        ],
-      },
-      {
-        memberProjectRefs: [{ environmentId: localEnvironmentId, projectId: ProjectId.make("b") }],
-      },
-    ];
-    const threads = [
-      { id: "b1", environmentId: localEnvironmentId, projectId: ProjectId.make("b") },
-      { id: "a1", environmentId: localEnvironmentId, projectId: ProjectId.make("a") },
-      { id: "b2", environmentId: localEnvironmentId, projectId: ProjectId.make("b") },
-      { id: "remote-a", environmentId: remote, projectId: ProjectId.make("a-remote") },
-      { id: "unknown", environmentId: remote, projectId: ProjectId.make("a") },
-    ];
-    const grouped = groupSidebarShelfThreads(groups, threads);
-    expect(
-      grouped.map(({ group, threads }) => ({
-        group: group === null ? null : groups.indexOf(group),
-        ids: threads.map((thread) => thread.id),
-      })),
-    ).toEqual([
-      { group: 1, ids: ["b1", "b2"] },
-      { group: 0, ids: ["a1", "remote-a"] },
-      { group: null, ids: ["unknown"] },
-    ]);
-    expect(
-      groupSidebarShelfThreads(
-        groups,
-        threads.filter((thread) => thread.projectId === "b"),
-      ),
-    ).toEqual([{ group: groups[1], threads: [threads[0], threads[2]] }]);
-    expect(groupSidebarShelfThreads(groups, [])).toEqual([]);
   });
 });

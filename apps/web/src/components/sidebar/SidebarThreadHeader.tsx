@@ -1,11 +1,4 @@
-import {
-  FolderPlusIcon,
-  FolderTreeIcon,
-  ListIcon,
-  SearchIcon,
-  SquarePenIcon,
-  XIcon,
-} from "lucide-react";
+import { FolderPlusIcon, GroupIcon, SearchIcon, SquarePenIcon, XIcon } from "lucide-react";
 import {
   type ComponentProps,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -21,8 +14,8 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
 export interface SidebarThreadHeaderProps {
   hasProjects: boolean;
-  groupedByProject: boolean;
-  onToggleProjectGrouping: () => void;
+  canGroupThreads: boolean;
+  onGroupThreads: () => void;
   projectScope: ReactNode;
   onNewProject: () => void;
   onNewThread: (event: ReactMouseEvent) => void;
@@ -42,8 +35,8 @@ export interface SidebarThreadHeaderProps {
 
 export function SidebarThreadHeader({
   hasProjects,
-  groupedByProject,
-  onToggleProjectGrouping,
+  canGroupThreads,
+  onGroupThreads,
   projectScope,
   onNewProject,
   onNewThread,
@@ -112,12 +105,12 @@ export function SidebarThreadHeader({
           <>
             {projectScope}
             <SidebarHeaderIconButton
-              label="Group threads by project"
-              tooltip={groupedByProject ? "Show individual threads" : "Group threads by project"}
-              aria-pressed={groupedByProject}
-              onClick={onToggleProjectGrouping}
+              label="Group selected threads"
+              tooltip="Select threads to group, or drag one onto another"
+              disabled={!canGroupThreads}
+              onClick={onGroupThreads}
             >
-              {groupedByProject ? <FolderTreeIcon /> : <ListIcon />}
+              <GroupIcon />
             </SidebarHeaderIconButton>
             <SidebarHeaderIconButton label="Add project" onClick={onNewProject}>
               <FolderPlusIcon />

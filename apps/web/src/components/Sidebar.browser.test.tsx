@@ -16,6 +16,8 @@ import { useProjects, useQuietThreadShells } from "../state/entities";
 import { makeThreadFixture } from "../test-fixtures";
 import type { Project } from "../types";
 import Sidebar from "./Sidebar";
+import { SIDEBAR_THREAD_GROUPS_KEY } from "./Sidebar.groups";
+import { useThreadSelectionStore } from "../threadSelectionStore";
 import { SidebarProvider } from "./ui/sidebar";
 
 vi.mock("../state/entities", { spy: true });
@@ -95,96 +97,202 @@ describe("sidebar header new thread", () => {
   });
 });
 
-it("collapses Working project groups and switches views without losing rows", async () => {
-  const section = "Working";
-  using stack = new DisposableStack();
-  const previousSettings = getClientSettings();
-  stack.defer(() => __setClientSettingsForTests(previousSettings));
-  __setClientSettingsForTests({
-    ...DEFAULT_CLIENT_SETTINGS,
-    boringSidebarEnabled: false,
-    legacySidebarEnabled: false,
-    sidebarWorkingShelfEnabled: true,
-  });
-  const projects = [project("alpha"), project("beta")];
-  const threads = [projects[0]!, projects[1]!, projects[0]!].map((project, index) =>
-    makeThreadFixture({
-      id: ThreadId.make(`grouped-${index}`),
-      title: `${section} task ${index}`,
-      environmentId: project.environmentId,
-      projectId: project.id,
-      latestUserMessageAt: `2026-01-01T00:00:0${3 - index}.000Z`,
-      runtime: {
-        status: "running",
-        activeRunId: null,
-        providerInstanceId: ProviderInstanceId.make("codex"),
-        providerName: "Codex",
-        lastError: null,
-        updatedAt: "2026-01-01T00:00:00.000Z",
-      },
-    }),
-  );
-  vi.mocked(useProjects).mockReturnValue(projects);
-  vi.mocked(useQuietThreadShells).mockReturnValue(threads);
-  stack.defer(() => vi.mocked(useQuietThreadShells).mockRestore());
-  vi.mocked(useHandleNewThread).mockReturnValue({
-    activeDraftThread: null,
-    activeThread: null,
-    defaultProjectRef: null,
-    handleNewThread: vi.fn(),
-    routeDraftId: null,
-    routeThreadRef: null,
-  });
-  await using screen = await render(
-    <SidebarProvider>
-      <Sidebar routeReveal={{ observedKey: null, pendingKey: null }} />
-    </SidebarProvider>,
-  );
-  const shelf = screen.getByRole("button", { name: new RegExp(`^${section}\\s*3$`) });
-  await expect.element(shelf).toBeVisible();
-  if (shelf.element().getAttribute("aria-expanded") === "false") await userEvent.click(shelf);
-  const taskOrder = () =>
-    [...screen.container.querySelectorAll<HTMLElement>("[data-sidebar-row]")]
-      .map((row) => row.getAttribute("aria-label"))
-      .filter((label) => label?.startsWith(`${section} task`));
-  const flatOrder = taskOrder();
-  expect(flatOrder).toHaveLength(3);
-  await userEvent.click(
-    screen.getByRole("button", { name: "Group threads by project", exact: true }),
-  );
-  await expect
-    .element(
-      screen.getByRole("button", {
-        name: `alpha: actions for 2 ${section.toLowerCase()} threads`,
-        exact: true,
+it.each(["selection", "drag"])(
+  "creates manual groups with $0 and preserves them when collapsed",
+  async (method) => {
+    const section = "Working";
+    using stack = new DisposableStack();
+    const storedGroups = localStorage.getItem(SIDEBAR_THREAD_GROUPS_KEY);
+    localStorage.removeItem(SIDEBAR_THREAD_GROUPS_KEY);
+    stack.defer(() => {
+      if (storedGroups === null) localStorage.removeItem(SIDEBAR_THREAD_GROUPS_KEY);
+      else localStorage.setItem(SIDEBAR_THREAD_GROUPS_KEY, storedGroups);
+      useThreadSelectionStore.getState().clearSelection();
+    });
+    const previousSettings = getClientSettings();
+    stack.defer(() => __setClientSettingsForTests(previousSettings));
+    __setClientSettingsForTests({
+      ...DEFAULT_CLIENT_SETTINGS,
+      boringSidebarEnabled: method === "selection",
+      legacySidebarEnabled: false,
+      sidebarWorkingShelfEnabled: true,
+    });
+    const projects = [project("alpha"), project("beta")];
+    const threads = [projects[0]!, projects[1]!, projects[0]!].map((project, index) =>
+      makeThreadFixture({
+        id: ThreadId.make(`grouped-${index}`),
+        title: `${section} task ${index}`,
+        environmentId: project.environmentId,
+        projectId: project.id,
+        latestUserMessageAt: `2026-01-01T00:00:0${3 - index}.000Z`,
+        runtime: {
+          status: "running",
+          activeRunId: null,
+          providerInstanceId: ProviderInstanceId.make("codex"),
+          providerName: "Codex",
+          lastError: null,
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
       }),
-    )
-    .toBeVisible();
-  expect(taskOrder()).toEqual([flatOrder[0], flatOrder[2], flatOrder[1]]);
-  const alphaGroup = screen.getByRole("button", {
-    name: `alpha: 2 ${section.toLowerCase()} threads`,
-    exact: true,
-  });
-  await userEvent.click(alphaGroup);
-  await expect.element(alphaGroup).toHaveAttribute("aria-expanded", "false");
-  expect(taskOrder()).toEqual([flatOrder[1]]);
-  await expect
-    .element(
-      screen.getByRole("button", {
-        name: `alpha: actions for 2 ${section.toLowerCase()} threads`,
-        exact: true,
-      }),
-    )
-    .toBeVisible();
-  await userEvent.click(alphaGroup);
-  await expect.element(alphaGroup).toHaveAttribute("aria-expanded", "true");
-  expect(taskOrder()).toEqual([flatOrder[0], flatOrder[2], flatOrder[1]]);
-
-  await userEvent.click(
-    screen.getByRole("button", { name: "Group threads by project", exact: true }),
-  );
-  await expect
-    .element(screen.getByRole("button", { name: "Group threads by project", exact: true }))
-    .toHaveAttribute("aria-pressed", "false");
-  expect(taskOrder()).toEqual(flatOrder);
-});
+    );
+    vi.mocked(useProjects).mockReturnValue(projects);
+    vi.mocked(useQuietThreadShells).mockReturnValue(threads);
+    stack.defer(() => vi.mocked(useQuietThreadShells).mockRestore());
+    vi.mocked(useHandleNewThread).mockReturnValue({
+      activeDraftThread: null,
+      activeThread: null,
+      defaultProjectRef: null,
+      handleNewThread: vi.fn(),
+      routeDraftId: null,
+      routeThreadRef: null,
+    });
+    await using screen = await render(
+      <SidebarProvider>
+        <Sidebar routeReveal={{ observedKey: null, pendingKey: null }} />
+      </SidebarProvider>,
+    );
+    const shelf = screen.getByRole("button", { name: new RegExp(`^${section}\\s*3$`) });
+    await expect.element(shelf).toBeVisible();
+    if (shelf.element().getAttribute("aria-expanded") === "false") await userEvent.click(shelf);
+    const taskOrder = () =>
+      [...screen.container.querySelectorAll<HTMLElement>("[data-sidebar-row]")]
+        .map((row) => row.getAttribute("aria-label"))
+        .filter((label) => label?.startsWith(`${section} task`));
+    const flatOrder = taskOrder();
+    expect(flatOrder).toHaveLength(3);
+    expect(screen.container.querySelectorAll('[data-testid="sidebar-thread-group"]')).toHaveLength(
+      0,
+    );
+    if (method === "selection") {
+      await userEvent.click(screen.getByRole("button", { name: flatOrder[0]!, exact: true }), {
+        modifiers: [/Mac/.test(navigator.platform) ? "Meta" : "Control"],
+      });
+      await userEvent.click(screen.getByRole("button", { name: flatOrder[1]!, exact: true }), {
+        modifiers: [/Mac/.test(navigator.platform) ? "Meta" : "Control"],
+      });
+      await userEvent.click(
+        screen.getByRole("button", { name: "Group selected threads", exact: true }),
+      );
+    } else {
+      const source = screen.getByRole("button", { name: flatOrder[1]!, exact: true }).element();
+      const target = screen.getByRole("button", { name: flatOrder[0]!, exact: true }).element();
+      const sourceRect = source.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      const pointer = { pointerId: 1, isPrimary: true, button: 0, buttons: 1, bubbles: true };
+      source.dispatchEvent(
+        new PointerEvent("pointerdown", {
+          ...pointer,
+          clientX: sourceRect.left + 20,
+          clientY: sourceRect.top + sourceRect.height / 2,
+        }),
+      );
+      document.dispatchEvent(
+        new PointerEvent("pointermove", {
+          ...pointer,
+          clientX: targetRect.left + 20,
+          clientY: targetRect.top + targetRect.height / 2,
+        }),
+      );
+      await expect
+        .element(screen.getByRole("status").filter({ hasText: "Create task group" }))
+        .toBeVisible();
+      const dropRect = target.getBoundingClientRect();
+      document.dispatchEvent(
+        new PointerEvent("pointerup", {
+          ...pointer,
+          buttons: 0,
+          clientX: dropRect.left + 20,
+          clientY: dropRect.top + dropRect.height / 2,
+        }),
+      );
+    }
+    const group = screen.getByRole("button", { name: "alpha: 2 working threads", exact: true });
+    await expect.element(group).toBeVisible();
+    expect(screen.container.querySelectorAll('[data-testid="sidebar-thread-group"]')).toHaveLength(
+      1,
+    );
+    expect(taskOrder()).toEqual(flatOrder);
+    await userEvent.click(group);
+    await expect.element(group).toHaveAttribute("aria-expanded", "false");
+    expect(taskOrder()).toEqual([flatOrder[2]]);
+    await expect
+      .element(screen.getByRole("button", { name: "alpha: group actions", exact: true }))
+      .toBeVisible();
+    await userEvent.click(group);
+    expect(taskOrder()).toEqual(flatOrder);
+    if (method === "drag") {
+      const pointer = { pointerId: 2, isPrimary: true, button: 0, buttons: 1, bubbles: true };
+      const source = screen.getByRole("button", { name: flatOrder[2]!, exact: true }).element();
+      const sourceRect = source.getBoundingClientRect();
+      const targetRect = group.element().getBoundingClientRect();
+      source.dispatchEvent(
+        new PointerEvent("pointerdown", {
+          ...pointer,
+          clientX: sourceRect.left + 20,
+          clientY: sourceRect.top + sourceRect.height / 2,
+        }),
+      );
+      document.dispatchEvent(
+        new PointerEvent("pointermove", {
+          ...pointer,
+          clientX: targetRect.left + 20,
+          clientY: targetRect.top + targetRect.height / 2,
+        }),
+      );
+      await expect
+        .element(screen.getByRole("status").filter({ hasText: "Add to alpha" }))
+        .toBeVisible();
+      const dropRect = group.element().getBoundingClientRect();
+      document.dispatchEvent(
+        new PointerEvent("pointerup", {
+          ...pointer,
+          buttons: 0,
+          clientX: dropRect.left + 20,
+          clientY: dropRect.top + dropRect.height / 2,
+        }),
+      );
+      await expect
+        .element(screen.getByRole("button", { name: "alpha: 3 working threads", exact: true }))
+        .toBeVisible();
+      const removeRect = source.getBoundingClientRect();
+      source.dispatchEvent(
+        new PointerEvent("pointerdown", {
+          ...pointer,
+          clientX: removeRect.left + 20,
+          clientY: removeRect.top + removeRect.height / 2,
+        }),
+      );
+      document.dispatchEvent(
+        new PointerEvent("pointermove", {
+          ...pointer,
+          clientX: removeRect.left + 30,
+          clientY: removeRect.top + removeRect.height / 2,
+        }),
+      );
+      await vi.waitFor(() =>
+        expect(screen.container.querySelector("[data-group-drop]")).not.toBeNull(),
+      );
+      const removal = screen.container.querySelector("[data-group-drop]")!.getBoundingClientRect();
+      document.dispatchEvent(
+        new PointerEvent("pointermove", {
+          ...pointer,
+          clientX: removal.left + 20,
+          clientY: removal.top + removal.height / 2,
+        }),
+      );
+      document.dispatchEvent(
+        new PointerEvent("pointerup", {
+          ...pointer,
+          buttons: 0,
+          clientX: removal.left + 20,
+          clientY: removal.top + removal.height / 2,
+        }),
+      );
+      await expect.element(group).toBeVisible();
+      expect(taskOrder()).toHaveLength(3);
+    }
+    const persisted = JSON.parse(localStorage.getItem(SIDEBAR_THREAD_GROUPS_KEY)!);
+    expect(persisted).toHaveLength(1);
+    expect(persisted[0].threadKeys).toHaveLength(2);
+  },
+);
