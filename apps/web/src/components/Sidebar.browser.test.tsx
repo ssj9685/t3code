@@ -95,7 +95,8 @@ describe("sidebar header new thread", () => {
   });
 });
 
-it("switches between individual Working threads and project groups without losing rows", async () => {
+it("collapses Working project groups and switches views without losing rows", async () => {
+  const section = "Working";
   using stack = new DisposableStack();
   const previousSettings = getClientSettings();
   stack.defer(() => __setClientSettingsForTests(previousSettings));
@@ -109,7 +110,7 @@ it("switches between individual Working threads and project groups without losin
   const threads = [projects[0]!, projects[1]!, projects[0]!].map((project, index) =>
     makeThreadFixture({
       id: ThreadId.make(`grouped-${index}`),
-      title: `Working task ${index}`,
+      title: `${section} task ${index}`,
       environmentId: project.environmentId,
       projectId: project.id,
       latestUserMessageAt: `2026-01-01T00:00:0${3 - index}.000Z`,
@@ -139,13 +140,13 @@ it("switches between individual Working threads and project groups without losin
       <Sidebar routeReveal={{ observedKey: null, pendingKey: null }} />
     </SidebarProvider>,
   );
-  const shelf = screen.getByRole("button", { name: /^Working\s*3$/ });
+  const shelf = screen.getByRole("button", { name: new RegExp(`^${section}\\s*3$`) });
   await expect.element(shelf).toBeVisible();
   if (shelf.element().getAttribute("aria-expanded") === "false") await userEvent.click(shelf);
   const taskOrder = () =>
     [...screen.container.querySelectorAll<HTMLElement>("[data-sidebar-row]")]
       .map((row) => row.getAttribute("aria-label"))
-      .filter((label) => label?.startsWith("Working task"));
+      .filter((label) => label?.startsWith(`${section} task`));
   const flatOrder = taskOrder();
   expect(flatOrder).toHaveLength(3);
   await userEvent.click(
@@ -153,10 +154,32 @@ it("switches between individual Working threads and project groups without losin
   );
   await expect
     .element(
-      screen.getByRole("button", { name: "alpha: actions for 2 working threads", exact: true }),
+      screen.getByRole("button", {
+        name: `alpha: actions for 2 ${section.toLowerCase()} threads`,
+        exact: true,
+      }),
     )
     .toBeVisible();
   expect(taskOrder()).toEqual([flatOrder[0], flatOrder[2], flatOrder[1]]);
+  const alphaGroup = screen.getByRole("button", {
+    name: `alpha: 2 ${section.toLowerCase()} threads`,
+    exact: true,
+  });
+  await userEvent.click(alphaGroup);
+  await expect.element(alphaGroup).toHaveAttribute("aria-expanded", "false");
+  expect(taskOrder()).toEqual([flatOrder[1]]);
+  await expect
+    .element(
+      screen.getByRole("button", {
+        name: `alpha: actions for 2 ${section.toLowerCase()} threads`,
+        exact: true,
+      }),
+    )
+    .toBeVisible();
+  await userEvent.click(alphaGroup);
+  await expect.element(alphaGroup).toHaveAttribute("aria-expanded", "true");
+  expect(taskOrder()).toEqual([flatOrder[0], flatOrder[2], flatOrder[1]]);
+
   await userEvent.click(
     screen.getByRole("button", { name: "Group threads by project", exact: true }),
   );

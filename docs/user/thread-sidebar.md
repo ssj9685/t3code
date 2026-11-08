@@ -158,7 +158,9 @@ close it. A closed folder shows how many threads it holds, and a dot when one of
 needs you. Use the pen button on a folder, or right-click it, to start a thread in that project.
 Use **Group threads by project** in the sidebar to switch between project groups and individual
 threads without opening Settings. Working, Snoozed, Settled, and pinned threads group by project
-within their own sections. The Working section still follows your **Working section** setting.
+within their own sections. Click a project heading to collapse or expand its tasks; each section
+remembers its own open groups. A collapsed group keeps its count and actions, and the open thread
+stays visible. The Working section still follows your **Working section** setting.
 
 Open a project group's actions to snooze or settle its listed threads together, or to unsnooze
 or unsettle them. The count in the menu is the number affected; other sections and older threads

@@ -544,19 +544,35 @@ function useSidebarThreads(input: {
               : EMPTY_THREADS,
           };
         });
+  const groupShelf = (
+    section: Exclude<SidebarSection, "active">,
+    threads: readonly EnvironmentThreadShell[],
+  ) =>
+    groupSidebarShelfThreads(folderGroups ?? [], threads).map((bucket) => {
+      const rowId = bucket.group ? `project:${section}:${bucket.group.projectKey}` : undefined;
+      const collapsed = rowId !== undefined && projectExpandedById[rowId] === false;
+      return {
+        ...bucket,
+        rowId,
+        collapsed,
+        visibleThreads: collapsed
+          ? routeThreadOnly(bucket.threads, routeRowThreadKey)
+          : bucket.threads,
+      };
+    });
   const shelfProjectGroups =
     folderGroups === null
       ? null
       : {
-          pinned: groupSidebarShelfThreads(folderGroups, pinnedThreads),
-          working: groupSidebarShelfThreads(folderGroups, visibleWorkingThreads),
-          snoozed: groupSidebarShelfThreads(folderGroups, visibleSnoozedThreads),
-          settled: groupSidebarShelfThreads(folderGroups, renderedSettledThreads),
+          pinned: groupShelf("pinned", pinnedThreads),
+          working: groupShelf("working", visibleWorkingThreads),
+          snoozed: groupShelf("snoozed", visibleSnoozedThreads),
+          settled: groupShelf("settled", renderedSettledThreads),
         };
   const shelfThreads = (
     section: keyof NonNullable<typeof shelfProjectGroups>,
     flat: readonly EnvironmentThreadShell[],
-  ) => shelfProjectGroups?.[section].flatMap((group) => group.threads) ?? flat;
+  ) => shelfProjectGroups?.[section].flatMap((group) => group.visibleThreads) ?? flat;
   const orderedThreads = [
     ...shelfThreads("pinned", pinnedThreads),
     ...(projectFolders === null
@@ -604,6 +620,8 @@ function useSidebarThreads(input: {
     toggleWorkingShelf: () => setWorkingShelfExpanded((value) => !value),
     projectFolders,
     shelfProjectGroups,
+    toggleShelfProject: (rowId: string) =>
+      setProjectExpanded(rowId, projectExpandedById[rowId] === false),
     toggleProjectFolder: (group: SidebarProjectSnapshot) => {
       const keys = sidebarFolderExpansionKeys(group);
       setProjectExpanded(keys, !resolveProjectExpanded(projectExpandedById, keys));
@@ -1333,6 +1351,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     toggleWorkingShelf,
     projectFolders,
     shelfProjectGroups,
+    toggleShelfProject,
     toggleProjectFolder,
     renderedSettledThreads,
     visibleSnoozedThreads,
@@ -3566,9 +3585,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                             if (renderedProjectSections.has(item.section)) continue;
                             renderedProjectSections.add(item.section);
                             for (const bucket of shelfProjectGroups[item.section]) {
-                              const rowId = bucket.group
-                                ? `project:${item.section}:${bucket.group.projectKey}`
-                                : undefined;
+                              const rowId = bucket.rowId;
                               if (bucket.group && rowId) {
                                 items.push(
                                   <SidebarProjectSectionHeader
@@ -3577,13 +3594,15 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                     section={item.section}
                                     group={bucket.group}
                                     count={bucket.threads.length}
+                                    collapsed={bucket.collapsed}
+                                    onToggle={() => toggleShelfProject(rowId)}
                                     onActions={(position) =>
                                       void handleProjectThreadActions(bucket.threads, position)
                                     }
                                   />,
                                 );
                               }
-                              for (const thread of bucket.threads)
+                              for (const thread of bucket.visibleThreads)
                                 items.push(renderThreadRow(thread, item.section, undefined, rowId));
                             }
                             continue;
