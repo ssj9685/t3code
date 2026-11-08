@@ -54,3 +54,32 @@ export function groupSidebarThreadsManually<T>(
   }
   return buckets;
 }
+
+export const SIDEBAR_ITEM_ORDER_KEY = "t3code:sidebar-item-order:v1";
+export const SidebarItemOrder = Schema.Record(Schema.String, Schema.Array(Schema.String));
+
+export function orderSidebarItems<T>(
+  items: readonly T[],
+  order: readonly string[],
+  key: (item: T) => string,
+): T[] {
+  const ranks = new Map(order.map((id, index) => [id, index]));
+  return [...items].sort(
+    (a, b) => (ranks.get(key(a)) ?? Infinity) - (ranks.get(key(b)) ?? Infinity),
+  );
+}
+
+export function moveSidebarItem(
+  order: readonly string[],
+  moving: readonly string[],
+  target: string,
+  after: boolean,
+): string[] {
+  if (moving.includes(target)) return [...order];
+  const selected = new Set(moving);
+  const next = order.filter((id) => !selected.has(id));
+  const index = next.indexOf(target);
+  if (index < 0) return [...order];
+  next.splice(index + Number(after), 0, ...new Set(moving));
+  return next;
+}

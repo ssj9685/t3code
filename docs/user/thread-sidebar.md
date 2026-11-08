@@ -95,14 +95,14 @@ edge to pin a thread. Section labels stay readable for the whole drag, and the s
 thread is over takes the accent color. Section labels also
 identify empty sections and a collapsed settled shelf.
 
-Drag within the pinned or active section to change its order. Other rows slide aside to show the
-spot where the thread will land. Drops into either section keep the position you choose. On
+On web and desktop, drag a task or group within its section to change its position. Drop at a
+row’s top or bottom edge when the insertion line appears. This order is saved on this client. On
 mobile, open a thread's menu and choose **Arrange threads**. Drag a handle within or between
 **Pinned** and **Active** to reorder, pin, or unpin. Drop onto the **Settled** divider to
 settle a thread. The dragged card shows the action before you release it. Expand **Snoozed**
 or **Settled** to drag a parked thread back into either live section. Each drop saves; close the sheet to return to the thread list.
-**Move up** and **Move down** are also available in the thread menu. The server
-saves the order, so it survives a refresh and appears on your other connected devices.
+On mobile, **Move up** and **Move down** are also available in the thread menu. The server
+saves that order, so it survives a refresh and appears on your other connected mobile devices.
 
 On web and desktop, the list also animates section changes made with thread actions such as
 **Pin**, **Settle**, and **Snooze**. These transitions respect your system's reduced-motion
@@ -145,17 +145,22 @@ This is on by default. Turn it off with **Settings → General → Working secti
 or **Settings → General → Working section** on iOS and Android. Each device keeps its own
 choice.
 
-While this is on, the active list is ordered by when each thread last came back to you, so you
-cannot manually reorder threads within it. You can still drag tasks together to group them on web
-and desktop. Your saved order returns when you turn it off.
+While this is on, the active list defaults to when each thread last came back to you. Web and
+desktop also let you arrange tasks and groups manually within each section. Use **Reset to
+automatic order** in the sidebar context menu to return to the default.
 
 ### Group chosen tasks
 
 Threads start individually. Drag a task onto the middle of another task to create a group,
-or onto a group heading to add it. Dropping near a row's top or bottom keeps the usual sort or
-status move. You can also select tasks with Command-click (Control-click on Windows/Linux),
+or onto the middle of a group heading to add it. Drop near a row’s top or bottom to insert
+a task at that position, inside or outside a group. You can also select tasks with Command-click (Control-click on Windows/Linux),
 then choose **Group selected threads** in the sidebar or selection menu. Groups can contain
 chosen tasks from different projects; sharing a project does not group tasks automatically.
+
+Right-click the list, a task, or a group and choose **Sort folders first, then by name** to
+organize the displayed tasks. You can move them again afterward or reset to automatic order.
+Hover over a group to see the projects represented by its loaded members, even when a project
+filter hides some of them. Mixed groups show a project count on their folder icon.
 
 Click a group heading to collapse or expand it. Its menu can rename the group, ungroup its tasks,
 or snooze, wake, settle, and restore the group's loaded tasks across all status sections.

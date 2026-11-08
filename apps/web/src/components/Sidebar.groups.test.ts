@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
-import { groupSidebarThreadsManually, moveSidebarGroupThreads } from "./Sidebar.groups";
+import {
+  groupSidebarThreadsManually,
+  moveSidebarGroupThreads,
+  moveSidebarItem,
+  orderSidebarItems,
+} from "./Sidebar.groups";
 
 describe("manual sidebar groups", () => {
   it("moves only chosen threads and keeps membership across sections, filters, and environments", () => {
@@ -33,4 +38,23 @@ describe("manual sidebar groups", () => {
       }),
     ).toEqual([{ id: "new", name: "Work", threadKeys: ["local:a", "local:b"] }]);
   });
+});
+
+it("orders folders and tasks independently without losing filtered or remote entries", () => {
+  const initial = ["group:a", "local:a", "remote:a", "local:b", "group:b"];
+  const moved = moveSidebarItem(initial, ["group:b"], "local:b", false);
+  expect(moved).toEqual(["group:a", "local:a", "remote:a", "group:b", "local:b"]);
+  expect(moveSidebarItem(moved, ["remote:a", "local:a"], "local:b", true)).toEqual([
+    "group:a",
+    "group:b",
+    "local:b",
+    "remote:a",
+    "local:a",
+  ]);
+  expect(orderSidebarItems(["local:b", "new", "group:b"], moved, (key) => key)).toEqual([
+    "group:b",
+    "local:b",
+    "new",
+  ]);
+  expect(moveSidebarItem(initial, ["local:a"], "local:a", false)).toEqual(initial);
 });

@@ -16,7 +16,7 @@ import { useProjects, useQuietThreadShells } from "../state/entities";
 import { makeThreadFixture } from "../test-fixtures";
 import type { Project } from "../types";
 import Sidebar from "./Sidebar";
-import { SIDEBAR_THREAD_GROUPS_KEY } from "./Sidebar.groups";
+import { SIDEBAR_ITEM_ORDER_KEY, SIDEBAR_THREAD_GROUPS_KEY } from "./Sidebar.groups";
 import { useThreadSelectionStore } from "../threadSelectionStore";
 import { SidebarProvider } from "./ui/sidebar";
 
@@ -102,6 +102,12 @@ it.each(["selection", "drag"])(
   async (method) => {
     const section = "Working";
     using stack = new DisposableStack();
+    const storedOrder = localStorage.getItem(SIDEBAR_ITEM_ORDER_KEY);
+    localStorage.removeItem(SIDEBAR_ITEM_ORDER_KEY);
+    stack.defer(() => {
+      if (storedOrder === null) localStorage.removeItem(SIDEBAR_ITEM_ORDER_KEY);
+      else localStorage.setItem(SIDEBAR_ITEM_ORDER_KEY, storedOrder);
+    });
     const storedGroups = localStorage.getItem(SIDEBAR_THREAD_GROUPS_KEY);
     localStorage.removeItem(SIDEBAR_THREAD_GROUPS_KEY);
     stack.defer(() => {
@@ -290,6 +296,65 @@ it.each(["selection", "drag"])(
       );
       await expect.element(group).toBeVisible();
       expect(taskOrder()).toHaveLength(3);
+      const reorder = async (source: Element, target: Element, after: boolean) => {
+        const sourceRect = source.getBoundingClientRect();
+        source.dispatchEvent(
+          new PointerEvent("pointerdown", {
+            ...pointer,
+            clientX: sourceRect.left + 40,
+            clientY: sourceRect.top + sourceRect.height / 2,
+          }),
+        );
+        document.dispatchEvent(
+          new PointerEvent("pointermove", {
+            ...pointer,
+            clientX: sourceRect.left + 55,
+            clientY: sourceRect.top + sourceRect.height / 2,
+          }),
+        );
+        await vi.waitFor(() =>
+          expect(screen.container.querySelector("[data-sidebar-drag-hint]")).not.toBeNull(),
+        );
+        const targetRect = target.getBoundingClientRect();
+        document.dispatchEvent(
+          new PointerEvent("pointermove", {
+            ...pointer,
+            clientX: targetRect.left + 40,
+            clientY: after ? targetRect.bottom - 2 : targetRect.top + 2,
+          }),
+        );
+        await expect
+          .element(screen.getByRole("status").filter({ hasText: "Move here" }))
+          .toBeVisible();
+        const updated = target.getBoundingClientRect();
+        document.dispatchEvent(
+          new PointerEvent("pointerup", {
+            ...pointer,
+            buttons: 0,
+            clientX: updated.left + 40,
+            clientY: after ? updated.bottom - 2 : updated.top + 2,
+          }),
+        );
+        await vi.waitFor(() =>
+          expect(screen.container.querySelector("[data-sidebar-drag-hint]")).toBeNull(),
+        );
+      };
+      const third = screen.getByRole("button", { name: flatOrder[2]!, exact: true });
+      await reorder(third.element(), group.element(), false);
+      await vi.waitFor(() =>
+        expect(taskOrder()).toEqual([flatOrder[2], flatOrder[0], flatOrder[1]]),
+      );
+      await reorder(group.element(), third.element(), false);
+      await vi.waitFor(() => expect(taskOrder()).toEqual(flatOrder));
+      await reorder(
+        screen.getByRole("button", { name: flatOrder[0]!, exact: true }).element(),
+        screen.getByRole("button", { name: flatOrder[1]!, exact: true }).element(),
+        true,
+      );
+      await vi.waitFor(() =>
+        expect(taskOrder()).toEqual([flatOrder[1], flatOrder[0], flatOrder[2]]),
+      );
+      expect(JSON.parse(localStorage.getItem(SIDEBAR_ITEM_ORDER_KEY)!).working).toHaveLength(4);
     }
     const persisted = JSON.parse(localStorage.getItem(SIDEBAR_THREAD_GROUPS_KEY)!);
     expect(persisted).toHaveLength(1);

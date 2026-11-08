@@ -253,6 +253,10 @@ import { SidebarThreadGroupHeader } from "./sidebar/SidebarThreadGroupHeader";
 import {
   SidebarThreadGroups,
   SIDEBAR_THREAD_GROUPS_KEY,
+  SIDEBAR_ITEM_ORDER_KEY,
+  SidebarItemOrder,
+  orderSidebarItems,
+  moveSidebarItem,
   moveSidebarGroupThreads,
   groupSidebarThreadsManually,
   type SidebarThreadGroup,
@@ -466,6 +470,7 @@ function useSidebarThreads(input: {
     [],
     SidebarThreadGroups,
   );
+  const [itemOrder, setItemOrder] = useLocalStorage(SIDEBAR_ITEM_ORDER_KEY, {}, SidebarItemOrder);
   const setProjectExpanded = useUiStateStore((store) => store.setProjectExpanded);
   const [settledTail, setSettledTail] = useState({
     scopeKey: projectScopeKey,
@@ -524,7 +529,15 @@ function useSidebarThreads(input: {
     ? workingThreads
     : routeThreadOnly(workingThreads, routeRowThreadKey);
   const groupShelf = (section: SidebarSection, threads: readonly EnvironmentThreadShell[]) =>
-    groupSidebarThreadsManually(threadGroups, threads, threadShellKey).map((bucket) => {
+    orderSidebarItems(
+      groupSidebarThreadsManually(
+        threadGroups,
+        orderSidebarItems(threads, itemOrder[section] ?? [], threadShellKey),
+        threadShellKey,
+      ),
+      itemOrder[section] ?? [],
+      (bucket) => (bucket.group ? `group:${bucket.group.id}` : threadShellKey(bucket.threads[0]!)),
+    ).map((bucket) => {
       const rowId = bucket.group ? `group:${section}:${bucket.group.id}` : undefined;
       const collapsed = rowId !== undefined && projectExpandedById[rowId] === false;
       return {
@@ -589,6 +602,8 @@ function useSidebarThreads(input: {
     workingShelfExpanded,
     toggleWorkingShelf: () => setWorkingShelfExpanded((value) => !value),
     sectionThreadGroups,
+    itemOrder,
+    setItemOrder,
     threadGroups,
     setThreadGroups,
     toggleThreadGroup: (rowId: string) =>
@@ -1267,6 +1282,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     workingShelfExpanded,
     toggleWorkingShelf,
     sectionThreadGroups,
+    itemOrder,
+    setItemOrder,
     threadGroups,
     setThreadGroups,
     toggleThreadGroup,
@@ -1294,10 +1311,40 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     compactRows: boringSidebarEnabled,
   });
 
+  const groupThreadByKey = new Map(threads.map((thread) => [threadShellKey(thread), thread]));
+  const groupProjectsById = new Map(
+    threadGroups.map((group) => [
+      group.id,
+      [
+        ...new Map(
+          group.threadKeys.flatMap((threadKey) => {
+            const thread = groupThreadByKey.get(threadKey);
+            if (!thread || thread.archivedAt || thread.deletedAt) return [];
+            const key = `${thread.environmentId}:${thread.projectId}` as const;
+            const project = projectByKey.get(key);
+            if (!project) return [];
+            const name = projectDisplayNameByKey.get(key) ?? project.title;
+            const environment = environmentLabelById.get(thread.environmentId);
+            return [
+              [
+                key,
+                { ...project, key, label: environment ? `${name} · ${environment}` : name },
+              ] as const,
+            ];
+          }),
+        ).values(),
+      ],
+    ]),
+  );
+
   const selectedThreadCount = useThreadSelectionStore((state) => state.selectedThreadKeys.size);
   const [renamingGroupRow, setRenamingGroupRow] = useState<string | null>(null);
   const [manualDrop, setManualDrop] = useState<{
-    kind: "thread" | "group" | "ungroup";
+    kind: "thread" | "group" | "ungroup" | "reorder";
+    section?: SidebarSection;
+    after?: boolean;
+    groupId?: string | undefined;
+    lineTop?: number;
     id: string;
     label: string;
   } | null>(null);
@@ -1310,8 +1357,20 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     const name = first
       ? (projectByKey.get(`${first.environmentId}:${first.projectId}`)?.title ?? "Task group")
       : "Task group";
+    const id = randomUUID();
     setThreadGroups((groups) =>
-      moveSidebarGroupThreads(groups, members, { id: randomUUID(), name, threadKeys: [] }),
+      moveSidebarGroupThreads(groups, members, { id, name, threadKeys: [] }),
+    );
+    setItemOrder((current) =>
+      Object.fromEntries(
+        Object.entries(current).map(([section, order]) => {
+          const firstMember = order.find((key) => members.includes(key));
+          return [
+            section,
+            firstMember ? moveSidebarItem(order, [`group:${id}`], firstMember, false) : order,
+          ];
+        }),
+      ),
     );
     clearSelection();
   };
@@ -1717,10 +1776,28 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     const scroll = dragScrollRef.current;
     if (scroll && scroll.viewport.scrollTop !== scroll.top) scroll.viewport.scrollTop = scroll.top;
   };
-  const manualDropAt = (point: { x: number; y: number }) => {
+  const groupDragSource = (key: string) => {
+    for (const section of ["pinned", "active", "working", "snoozed", "settled"] as const) {
+      const bucket = sectionThreadGroups[section].find((bucket) => bucket.rowId === key);
+      if (bucket?.group) return { section, group: bucket.group };
+    }
+    return null;
+  };
+  const sectionOrder = (section: SidebarSection) => [
+    ...new Set([
+      ...(itemOrder[section] ?? []),
+      ...sectionThreadGroups[section].flatMap((bucket) => [
+        ...(bucket.group ? [`group:${bucket.group.id}`] : []),
+        ...bucket.threads.map(threadShellKey),
+      ]),
+    ]),
+  ];
+  const manualDropAt = (point: { x: number; y: number }): NonNullable<typeof manualDrop> | null => {
     const source = contextDragKeyRef.current;
     const list = threadListRef.current;
     if (!source || !list || pointerOutsideThreadList(point)) return null;
+    const sourceGroup = groupDragSource(source);
+    const sourceSection = sourceGroup?.section ?? sectionByThreadKey.get(source);
     const selected = useThreadSelectionStore.getState().selectedThreadKeys;
     const moving = selected.has(source) ? selected : new Set([source]);
     for (const element of list.querySelectorAll<HTMLElement>(
@@ -1734,9 +1811,49 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         point.y > rect.bottom
       )
         continue;
-      if (element.dataset.groupDrop === "ungroup")
+      if (!sourceGroup && element.dataset.groupDrop === "ungroup")
         return { kind: "ungroup" as const, id: "ungroup", label: "Remove from group" };
       const groupId = element.dataset.threadGroup;
+      const rowKey = element.dataset.sidebarRow;
+      const destinationGroup = groupId
+        ? threadGroups.find((group) => group.id === groupId)
+        : threadGroups.find((group) => group.threadKeys.includes(rowKey ?? ""));
+      const targetSection = groupId
+        ? groupDragSource(
+            element.querySelector<HTMLElement>("[data-sidebar-row]")?.dataset.sidebarRow ?? "",
+          )?.section
+        : sectionByThreadKey.get(rowKey ?? "");
+      const edge = point.y < rect.top + rect.height / 4 || point.y > rect.bottom - rect.height / 4;
+      if ((sourceGroup || edge) && sourceSection === targetSection && targetSection) {
+        const targetId =
+          groupId || (sourceGroup && destinationGroup) ? `group:${destinationGroup!.id}` : rowKey;
+        if (
+          targetId &&
+          (sourceGroup ? targetId !== `group:${sourceGroup.group.id}` : !moving.has(targetId))
+        ) {
+          const after = point.y > rect.top + rect.height / 2;
+          let lineY = after ? rect.bottom : rect.top;
+          if (targetId.startsWith("group:") && destinationGroup) {
+            const parent = `group:${targetSection}:${destinationGroup.id}`;
+            for (const row of list.querySelectorAll<HTMLElement>("[data-sidebar-row]")) {
+              if (!after && row.dataset.sidebarRow === parent)
+                lineY = row.getBoundingClientRect().top;
+              if (after && row.dataset.sidebarParent === parent)
+                lineY = Math.max(lineY, row.getBoundingClientRect().bottom);
+            }
+          }
+          return {
+            kind: "reorder" as const,
+            id: targetId,
+            section: targetSection,
+            after,
+            groupId: sourceGroup || groupId ? undefined : destinationGroup?.id,
+            lineTop: lineY - list.getBoundingClientRect().top,
+            label: "Move here",
+          };
+        }
+      }
+      if (sourceGroup) continue;
       if (groupId) {
         const group = threadGroups.find((group) => group.id === groupId);
         if (group && [...moving].some((key) => !group.threadKeys.includes(key)))
@@ -1761,7 +1878,27 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     if (!target || !source) return false;
     const selected = useThreadSelectionStore.getState().selectedThreadKeys;
     const keys = selected.has(source) ? [...selected] : [source];
-    if (target.kind === "thread") createManualGroup([target.id, ...keys]);
+    if (target.kind === "reorder") {
+      const sourceGroup = groupDragSource(source);
+      const section = target.section;
+      if (!section) return false;
+      const moving = sourceGroup
+        ? [`group:${sourceGroup.group.id}`]
+        : keys.filter((key) => sectionByThreadKey.get(key) === section);
+      const order = sectionOrder(section);
+      setItemOrder((current) => ({
+        ...current,
+        [section]: moveSidebarItem(order, moving, target.id, target.after ?? false),
+      }));
+      if (!sourceGroup)
+        setThreadGroups((groups) =>
+          moveSidebarGroupThreads(
+            groups,
+            moving,
+            groups.find((group) => group.id === target.groupId) ?? null,
+          ),
+        );
+    } else if (target.kind === "thread") createManualGroup([target.id, ...keys]);
     else
       setThreadGroups((groups) =>
         moveSidebarGroupThreads(
@@ -1778,9 +1915,15 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const moveThreadContextDrag = (point: { x: number; y: number }) => {
     const target = manualDropAt(point);
     setManualDrop((current) =>
-      current?.kind === target?.kind && current?.id === target?.id ? current : target,
+      current?.kind === target?.kind &&
+      current?.id === target?.id &&
+      current?.after === target?.after &&
+      current?.lineTop === target?.lineTop
+        ? current
+        : target,
     );
-    const contextDrag = pointerOutsideThreadList(point);
+    const contextDrag =
+      !groupDragSource(contextDragKeyRef.current ?? "") && pointerOutsideThreadList(point);
     setDragState((current) =>
       current === null || current.contextDrag === contextDrag
         ? current
@@ -1799,6 +1942,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   };
   const dropThreadContextDrag = (point: { x: number; y: number }) => {
     if (dropManualGroup(point)) return true;
+    if (groupDragSource(contextDragKeyRef.current ?? "")) return true;
     if (!pointerOutsideThreadList(point)) return false;
     restoreDragScroll();
     dropThreadContext(point, contextDragThreads());
@@ -1923,7 +2067,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const handleThreadDragStart = (event: DragStartEvent) => {
     const activeKey = String(event.active.id);
     contextDragKeyRef.current = activeKey;
-    const activeSection = sectionByThreadKey.get(activeKey);
+    const activeSection = sectionByThreadKey.get(activeKey) ?? groupDragSource(activeKey)?.section;
     if (activeSection === undefined) return;
     listMotionRef.current?.suspend();
     const list = threadListRef.current;
@@ -2005,11 +2149,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   useEffect(() => {
     if (
       dragState !== null &&
+      !groupDragSource(dragState.activeKey) &&
       !sidebarListItems.some((item) => item.kind === "thread" && item.key === dragState.activeKey)
     ) {
       cancelThreadDrag();
     }
-  }, [cancelThreadDrag, dragState, sidebarListItems]);
+  }, [cancelThreadDrag, dragState, groupDragSource, sidebarListItems]);
   // Only order, section, or draft changes need layout reads and motion.
   const listMotionLayoutKey = [
     sidebarListItemsKey,
@@ -2055,7 +2200,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         });
   const sidebarSortingStrategy = createSidebarSortingStrategy({
     items: sidebarListItems,
-    enabled: !isContextDrag && manualDrop === null && threadGroups.length === 0,
+    enabled:
+      !isContextDrag &&
+      manualDrop === null &&
+      threadGroups.length === 0 &&
+      Object.keys(itemOrder).length === 0,
     boundaryLabelHeight: SIDEBAR_DRAG_LABEL_HEIGHT,
     settledOrder: draggedSettledOrder,
     ...(draggedActiveOrder === undefined ? {} : { activeOrder: draggedActiveOrder }),
@@ -2292,6 +2441,47 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     })();
   };
 
+  const sortSidebar = () => {
+    setItemOrder((current) => {
+      const next = { ...current };
+      for (const section of ["pinned", "active", "working", "snoozed", "settled"] as const) {
+        const buckets = [...sectionThreadGroups[section]].sort(
+          (a, b) =>
+            Number(b.group !== null) - Number(a.group !== null) ||
+            (a.group?.name ?? a.threads[0]!.title).localeCompare(
+              b.group?.name ?? b.threads[0]!.title,
+            ),
+        );
+        const visible = buckets.flatMap((bucket) => [
+          ...(bucket.group ? [`group:${bucket.group.id}`] : []),
+          ...[...bucket.threads].sort((a, b) => a.title.localeCompare(b.title)).map(threadShellKey),
+        ]);
+        next[section] = [...new Set([...visible, ...(current[section] ?? [])])];
+      }
+      return next;
+    });
+  };
+  const sortingMenuItems = [
+    { id: "sort-sidebar", label: "Sort folders first, then by name" },
+    { id: "reset-sidebar-order", label: "Reset to automatic order" },
+  ];
+  const applySortAction = (action: string | null) => {
+    if (action === "sort-sidebar") {
+      sortSidebar();
+      return true;
+    }
+    if (action === "reset-sidebar-order") {
+      setItemOrder({});
+      return true;
+    }
+    return false;
+  };
+  const handleSidebarContextMenu = async (position: { x: number; y: number }) => {
+    const api = readLocalApi();
+    if (!api) return;
+    const clicked = await settlePromise(() => api.contextMenu.show(sortingMenuItems, position));
+    if (clicked._tag === "Success") applySortAction(clicked.value);
+  };
   const handleThreadGroupActions = useStableCallback(
     async (group: SidebarThreadGroup, rowId: string, position: { x: number; y: number }) => {
       const api = readLocalApi();
@@ -2325,6 +2515,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       const clicked = await settlePromise(() =>
         api.contextMenu.show(
           [
+            ...sortingMenuItems,
             { id: "rename-group", label: "Rename group" },
             { id: "dissolve-group", label: "Ungroup threads" },
             {
@@ -2358,6 +2549,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       );
       if (clicked._tag === "Failure" || clicked.value === null) return;
       const action = clicked.value;
+      if (applySortAction(action)) return;
       if (action === "rename-group") {
         setRenamingGroupRow(rowId);
         return;
@@ -2813,6 +3005,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                     },
                   ].filter((item) => item.children.length > 0)
                 : []),
+              ...sortingMenuItems,
               ...threadMenuItems,
             ],
             position,
@@ -2849,6 +3042,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           if (preset) attemptSnooze(threadRef, preset);
           return;
         }
+        if (applySortAction(clicked.value)) return;
         switch (clicked.value) {
           case "filter-by-project":
             if (threadProjectGroup) {
@@ -3491,6 +3685,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 <SortableContext items={sortableIds} strategy={sidebarSortingStrategy}>
                   <ul
                     ref={attachTreeRef}
+                    onContextMenu={(event) => {
+                      if (event.defaultPrevented) return;
+                      event.preventDefault();
+                      void handleSidebarContextMenu({ x: event.clientX, y: event.clientY });
+                    }}
                     // Presentation flattens VoiceOver's list interaction boundary while preserving descendant
                     // controls.
                     role="presentation"
@@ -3504,13 +3703,26 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                         "after:pointer-events-none after:absolute after:inset-x-0 after:-bottom-30 after:h-px after:content-['']",
                     )}
                   >
+                    {manualDrop?.kind === "reorder" ? (
+                      <li
+                        aria-hidden
+                        className="pointer-events-none absolute inset-x-0 z-40 h-0.5 list-none bg-ring"
+                        style={{ top: manualDrop.lineTop }}
+                      />
+                    ) : null}
                     {dragState !== null ? (
                       <li
                         className="sticky top-0 z-30 list-none rounded-md border border-sidebar-border bg-sidebar px-3 py-2 text-xs"
-                        data-group-drop="ungroup"
+                        data-sidebar-drag-hint
+                        data-group-drop={
+                          groupDragSource(dragState.activeKey) ? undefined : "ungroup"
+                        }
                       >
                         <span role="status">
-                          {manualDrop?.label ?? "Drop here to remove from group"}
+                          {manualDrop?.label ??
+                            (groupDragSource(dragState.activeKey)
+                              ? "Drag folder to a new position"
+                              : "Drop here to remove from group")}
                         </span>
                       </li>
                     ) : null}
@@ -3662,6 +3874,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                   section={item.section}
                                   group={group}
                                   count={bucket.threads.length}
+                                  projects={groupProjectsById.get(group.id) ?? []}
                                   collapsed={bucket.collapsed}
                                   dropTarget={
                                     manualDrop?.kind === "group" && manualDrop.id === group.id
