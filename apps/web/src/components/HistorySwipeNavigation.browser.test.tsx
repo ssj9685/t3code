@@ -12,7 +12,7 @@ function swipe(target: Element, deltaX: number) {
   }
 }
 
-describe("HistorySwipeNavigation", () => {
+describe.each(["MacIntel", "Win32"])("HistorySwipeNavigation on %s", (platform) => {
   it.each([
     ["scrolling left inside a shadow-root scroller keeps the thread", "shadow", 100, -130, false],
     ["scrolling right inside a shadow-root scroller keeps the thread", "shadow", 100, 130, false],
@@ -29,6 +29,7 @@ describe("HistorySwipeNavigation", () => {
     ["a swipe that started in a closed dialog keeps the thread", "closed-dialog", 0, -130, false],
   ] as const)("%s", async (_name, scroller, scrollLeft, deltaX, navigates) => {
     navigateHistory.mockReset();
+    using _platform = vi.spyOn(navigator, "platform", "get").mockReturnValue(platform);
     await using screen = await render(<HistorySwipeNavigation />);
     const panel = screen.container.appendChild(document.createElement("div"));
     const root = scroller.startsWith("shadow") ? panel.attachShadow({ mode: "open" }) : panel;
@@ -56,6 +57,6 @@ describe("HistorySwipeNavigation", () => {
       swipe(content, deltaX);
     }
 
-    expect(navigateHistory).toHaveBeenCalledTimes(navigates ? 1 : 0);
+    expect(navigateHistory).toHaveBeenCalledTimes(navigates && platform !== "MacIntel" ? 1 : 0);
   });
 });
