@@ -1,6 +1,6 @@
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { ChevronDownIcon, SquarePenIcon } from "lucide-react";
+import { ChevronDownIcon, MoreHorizontalIcon, SquarePenIcon } from "lucide-react";
 import { memo } from "react";
 
 import { cn } from "~/lib/utils";
@@ -38,6 +38,8 @@ export function sidebarFolderRowId(projectKey: string) {
 export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHeader(props: {
   group: SidebarProjectSnapshot;
   collapsed: boolean;
+  threadCount: number;
+  onThreadActions: (position: { x: number; y: number }) => void;
   hiddenThreads: readonly EnvironmentThreadShell[];
   onToggle: (group: SidebarProjectSnapshot) => void;
   onNewThread: (group: SidebarProjectSnapshot) => void;
@@ -99,6 +101,28 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
       </button>
       {/* Sits over the count, which hides on hover, and left of the chevron. */}
       <span className="absolute inset-y-0 right-6 flex items-center opacity-0 focus-within:opacity-100 group-hover/project-folder:opacity-100 pointer-coarse:opacity-100">
+        {props.threadCount > 0 ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  data-sidebar-action-for={rowId}
+                  size="icon-xs"
+                  variant="ghost-muted"
+                  aria-label={`${group.displayName}: actions for ${props.threadCount} active threads`}
+                  aria-haspopup="menu"
+                  onClick={(event) => {
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    props.onThreadActions({ x: rect.left, y: rect.bottom });
+                  }}
+                />
+              }
+            >
+              <MoreHorizontalIcon aria-hidden />
+            </TooltipTrigger>
+            <TooltipPopup>Actions for {props.threadCount} threads</TooltipPopup>
+          </Tooltip>
+        ) : null}
         <Tooltip>
           <TooltipTrigger
             render={

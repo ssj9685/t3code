@@ -966,6 +966,34 @@ export function groupSidebarThreadsByProject<
   return folders.filter((folder) => folder.threads.length > 0 || keepEmpty(folder.group));
 }
 
+// Shelves keep the first thread's priority for each project, including across environments.
+export function groupSidebarShelfThreads<
+  TGroup extends {
+    readonly memberProjectRefs: ReadonlyArray<{
+      readonly environmentId: EnvironmentId;
+      readonly projectId: string;
+    }>;
+  },
+  TThread extends Pick<SidebarThreadSummary, "environmentId" | "projectId">,
+>(groups: readonly TGroup[], threads: readonly TThread[]) {
+  const groupByProject = new Map<string, TGroup>();
+  for (const group of groups) {
+    for (const ref of group.memberProjectRefs) {
+      groupByProject.set(`${ref.environmentId}:${ref.projectId}`, group);
+    }
+  }
+  const buckets = new Map<TGroup | string, { group: TGroup | null; threads: TThread[] }>();
+  for (const thread of threads) {
+    const projectKey = `${thread.environmentId}:${thread.projectId}`;
+    const group = groupByProject.get(projectKey) ?? null;
+    const key = group ?? projectKey;
+    const bucket = buckets.get(key);
+    if (bucket) bucket.threads.push(thread);
+    else buckets.set(key, { group, threads: [thread] });
+  }
+  return [...buckets.values()];
+}
+
 export type SidebarV2TopStatusKind =
   | "approval"
   | "done"

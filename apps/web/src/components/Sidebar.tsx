@@ -133,7 +133,11 @@ import { useTerminalFocus } from "../hooks/useTerminalFocus";
 import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
 import { registerSettleAndAdvance } from "../settleAndAdvance";
 import { startNewThreadFromContext } from "../lib/chatThreadActions";
-import { useBoringSidebarEnabled, useClientSettings } from "../hooks/useSettings";
+import {
+  updateClientSettings,
+  useBoringSidebarEnabled,
+  useClientSettings,
+} from "../hooks/useSettings";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
@@ -181,6 +185,7 @@ import {
   applySidebarThreadDrop,
   filterSidebarV2VisibleThreads,
   groupSidebarThreadsByProject,
+  groupSidebarShelfThreads,
   sidebarFolderExpansionKeys,
   buildBulkTitleRegenerationContextMenuItem,
   buildBulkUnpinContextMenuItem,
@@ -251,6 +256,7 @@ import {
 } from "./ui/combobox";
 import { SidebarContent, SidebarGroup, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
+import { SidebarProjectSectionHeader } from "./sidebar/SidebarProjectSectionHeader";
 import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
 import { TooltipProvider } from "./ui/tooltip";
 import { composerDraftHasUserContent, DraftId, useComposerDraftStore } from "../composerDraftStore";
@@ -538,14 +544,27 @@ function useSidebarThreads(input: {
               : EMPTY_THREADS,
           };
         });
+  const shelfProjectGroups =
+    folderGroups === null
+      ? null
+      : {
+          pinned: groupSidebarShelfThreads(folderGroups, pinnedThreads),
+          working: groupSidebarShelfThreads(folderGroups, visibleWorkingThreads),
+          snoozed: groupSidebarShelfThreads(folderGroups, visibleSnoozedThreads),
+          settled: groupSidebarShelfThreads(folderGroups, renderedSettledThreads),
+        };
+  const shelfThreads = (
+    section: keyof NonNullable<typeof shelfProjectGroups>,
+    flat: readonly EnvironmentThreadShell[],
+  ) => shelfProjectGroups?.[section].flatMap((group) => group.threads) ?? flat;
   const orderedThreads = [
-    ...pinnedThreads,
+    ...shelfThreads("pinned", pinnedThreads),
     ...(projectFolders === null
       ? activeThreads
       : projectFolders.flatMap((folder) => folder.threads)),
-    ...visibleWorkingThreads,
-    ...visibleSnoozedThreads,
-    ...renderedSettledThreads,
+    ...shelfThreads("working", visibleWorkingThreads),
+    ...shelfThreads("snoozed", visibleSnoozedThreads),
+    ...shelfThreads("settled", renderedSettledThreads),
   ];
   const sectionByThreadKey = new Map<string, SidebarSection>();
   for (const [list, section] of [
@@ -584,6 +603,7 @@ function useSidebarThreads(input: {
     workingShelfExpanded,
     toggleWorkingShelf: () => setWorkingShelfExpanded((value) => !value),
     projectFolders,
+    shelfProjectGroups,
     toggleProjectFolder: (group: SidebarProjectSnapshot) => {
       const keys = sidebarFolderExpansionKeys(group);
       setProjectExpanded(keys, !resolveProjectExpanded(projectExpandedById, keys));
@@ -1312,6 +1332,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     workingShelfExpanded,
     toggleWorkingShelf,
     projectFolders,
+    shelfProjectGroups,
     toggleProjectFolder,
     renderedSettledThreads,
     visibleSnoozedThreads,
@@ -2233,7 +2254,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         threadKey,
         currentThreadKey: readRouteThreadKey(router),
         action: "snooze",
-        // oxlint-disable-next-line react/purity -- runs in an event handler (oxc#27309)
         now: new Date().toISOString(),
         thread: readThreadShell(threadRef),
       })
@@ -2263,6 +2283,81 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     })();
   };
 
+  const handleProjectThreadActions = useStableCallback(
+    async (members: readonly EnvironmentThreadShell[], position: { x: number; y: number }) => {
+      const api = readLocalApi();
+      if (!api || members.length === 0) return;
+      const refs = members.map((thread) => scopeThreadRef(thread.environmentId, thread.id));
+      const currentMembers = () =>
+        refs.flatMap((ref) => {
+          const thread = readThreadShell(ref);
+          return thread && thread.deletedAt == null && thread.archivedAt == null ? [thread] : [];
+        });
+      const targets = currentMembers();
+      if (targets.length === 0) return;
+      const now = new Date();
+      const supported = targets.every((thread) => serverConfigs.has(thread.environmentId));
+      const allowed = supported && canOperateThreads(targets);
+      const snoozed = targets.every((thread) =>
+        effectiveSnoozed(thread, { now: now.toISOString() }),
+      );
+      const settled = targets.every((thread) => thread.settledOverride === "settled");
+      const presets = resolveSnoozePresets(now, timestampFormat, targets[0]!.environmentId);
+      const clicked = await settlePromise(() =>
+        api.contextMenu.show(
+          [
+            {
+              id: settled ? "unsettle" : "settle",
+              label: `${settled ? "Unsettle" : "Settle"} (${targets.length})`,
+              disabled: !allowed,
+            },
+            ...(snoozed
+              ? [{ id: "unsnooze", label: `Unsnooze (${targets.length})`, disabled: !allowed }]
+              : []),
+            {
+              id: "snooze",
+              label: `${snoozed ? "Reschedule snooze" : "Snooze"} (${targets.length})`,
+              disabled:
+                !allowed ||
+                !targets.every((thread) => canSnooze(thread, { now: now.toISOString() })),
+              children: [
+                ...presets.map((preset) => ({
+                  id: `snooze:${preset.id}`,
+                  label: `${preset.label} (${preset.whenLabel})`,
+                })),
+                { id: "snooze:custom", label: "Custom…", separatorBefore: presets.length > 0 },
+              ],
+            },
+          ],
+          position,
+        ),
+      );
+      if (clicked._tag === "Failure" || clicked.value === null) return;
+      const action = clicked.value;
+      const preset = action.startsWith("snooze:")
+        ? action === "snooze:custom"
+          ? await requestCustomSnooze()
+          : pickSnoozePreset(
+              presets,
+              action.slice("snooze:".length),
+              timestampFormat,
+              targets[0]!.environmentId,
+            )
+        : null;
+      if (action.startsWith("snooze:") && preset === null) return;
+      const current = currentMembers();
+      if (current.length === 0 || !checkThreadOperations(current)) return;
+      const coParkingKeys = new Set(current.map(threadShellKey));
+      for (const thread of current) {
+        const ref = scopeThreadRef(thread.environmentId, thread.id);
+        if (preset) attemptSnooze(ref, preset, { coSnoozingKeys: coParkingKeys });
+        else if (action === "settle") attemptSettle(ref, { coSettlingKeys: coParkingKeys });
+        else if (action === "unsettle") attemptUnsettle(ref);
+        else if (action === "unsnooze") attemptUnsnooze(ref);
+      }
+    },
+  );
+
   const handleMultiSelectContextMenu = useStableCallback(
     async (position: { x: number; y: number }) => {
       const api = readLocalApi();
@@ -2273,7 +2368,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       );
       if (threadKeys.length === 0) return;
       const count = threadKeys.length;
-      // oxlint-disable-next-line react/purity -- runs in an event handler (oxc#27309)
       const selectionNow = new Date();
       const selectedThreads = threadKeys.flatMap((threadKey) => {
         const thread = threadByKeyRef.current.get(threadKey);
@@ -2304,7 +2398,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         pinnedCount: pinnedSelectedThreads.length,
       });
       // Presets sync across environments, so the first selected thread's stand for all.
-      // oxlint-disable-next-line react/purity -- runs in an event handler (oxc#27309)
       const menuOpenedAt = new Date();
       const snoozePresets = resolveSnoozePresets(
         menuOpenedAt,
@@ -2985,6 +3078,19 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           <SidebarGroup className="z-[1]">
             <SidebarThreadHeader
               hasProjects={projectGroups.length > 0}
+              groupedByProject={boringSidebarEnabled}
+              onToggleProjectGrouping={() => {
+                void updateClientSettings({
+                  boringSidebarEnabled: !boringSidebarEnabled,
+                  legacySidebarEnabled: false,
+                }).catch((error: unknown) => {
+                  toastManager.add({
+                    type: "error",
+                    title: "Failed to change sidebar view",
+                    description: error instanceof Error ? error.message : "An error occurred.",
+                  });
+                });
+              }}
               projectScope={
                 <Combobox
                   items={projectScopeItems}
@@ -3322,6 +3428,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                         section: SidebarSection,
                         // The tree row of the project folder this row sits in.
                         folderRow?: string,
+                        projectSectionRow?: string,
                       ) => {
                         const threadKey = scopedThreadKey(
                           scopeThreadRef(thread.environmentId, thread.id),
@@ -3350,6 +3457,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                             variant={rowVariant}
                             navigationParent={
                               folderRow ??
+                              projectSectionRow ??
                               (section === "working" ||
                               section === "snoozed" ||
                               section === "settled"
@@ -3449,10 +3557,37 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                           onDraftContextMenu={handleDraftContextMenu}
                         />,
                       ];
+                      const renderedProjectSections = new Set<SidebarSection>();
                       for (const item of sidebarListItems) {
                         if (item.kind === "thread") {
                           // Folders draw active rows in their own place below.
                           if (projectFolders !== null && item.section === "active") continue;
+                          if (shelfProjectGroups !== null && item.section !== "active") {
+                            if (renderedProjectSections.has(item.section)) continue;
+                            renderedProjectSections.add(item.section);
+                            for (const bucket of shelfProjectGroups[item.section]) {
+                              const rowId = bucket.group
+                                ? `project:${item.section}:${bucket.group.projectKey}`
+                                : undefined;
+                              if (bucket.group && rowId) {
+                                items.push(
+                                  <SidebarProjectSectionHeader
+                                    key={rowId}
+                                    rowId={rowId}
+                                    section={item.section}
+                                    group={bucket.group}
+                                    count={bucket.threads.length}
+                                    onActions={(position) =>
+                                      void handleProjectThreadActions(bucket.threads, position)
+                                    }
+                                  />,
+                                );
+                              }
+                              for (const thread of bucket.threads)
+                                items.push(renderThreadRow(thread, item.section, undefined, rowId));
+                            }
+                            continue;
+                          }
                           items.push(renderThreadRow(threadByKey.get(item.key)!, item.section));
                           continue;
                         }
@@ -3467,6 +3602,13 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                 onToggle={toggleProjectFolder}
                                 onNewThread={startThreadInProjectFolder}
                                 onContextMenu={handleProjectFolderContextMenu}
+                                onThreadActions={(position) =>
+                                  void handleProjectThreadActions(
+                                    [...folder.threads, ...folder.hiddenThreads],
+                                    position,
+                                  )
+                                }
+                                threadCount={folder.threads.length + folder.hiddenThreads.length}
                               />,
                             );
                             for (const thread of folder.threads) {

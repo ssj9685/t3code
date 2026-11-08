@@ -1,4 +1,10 @@
-import { DEFAULT_CLIENT_SETTINGS, EnvironmentId, ProjectId } from "@t3tools/contracts";
+import {
+  DEFAULT_CLIENT_SETTINGS,
+  EnvironmentId,
+  ProjectId,
+  ProviderInstanceId,
+  ThreadId,
+} from "@t3tools/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser";
 
@@ -6,7 +12,8 @@ import { render } from "../../test/render";
 import { openCommandPalette } from "../commandPaletteBus";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { __setClientSettingsForTests, getClientSettings } from "../hooks/useSettings";
-import { useProjects } from "../state/entities";
+import { useProjects, useQuietThreadShells } from "../state/entities";
+import { makeThreadFixture } from "../test-fixtures";
 import type { Project } from "../types";
 import Sidebar from "./Sidebar";
 import { SidebarProvider } from "./ui/sidebar";
@@ -86,4 +93,75 @@ describe("sidebar header new thread", () => {
       expect(startThread).toHaveBeenCalledExactlyOnceWith(currentProjectRef);
     }
   });
+});
+
+it("switches between individual Working threads and project groups without losing rows", async () => {
+  using stack = new DisposableStack();
+  const previousSettings = getClientSettings();
+  stack.defer(() => __setClientSettingsForTests(previousSettings));
+  __setClientSettingsForTests({
+    ...DEFAULT_CLIENT_SETTINGS,
+    boringSidebarEnabled: false,
+    legacySidebarEnabled: false,
+    sidebarWorkingShelfEnabled: true,
+  });
+  const projects = [project("alpha"), project("beta")];
+  const threads = [projects[0]!, projects[1]!, projects[0]!].map((project, index) =>
+    makeThreadFixture({
+      id: ThreadId.make(`grouped-${index}`),
+      title: `Working task ${index}`,
+      environmentId: project.environmentId,
+      projectId: project.id,
+      latestUserMessageAt: `2026-01-01T00:00:0${3 - index}.000Z`,
+      runtime: {
+        status: "running",
+        activeRunId: null,
+        providerInstanceId: ProviderInstanceId.make("codex"),
+        providerName: "Codex",
+        lastError: null,
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    }),
+  );
+  vi.mocked(useProjects).mockReturnValue(projects);
+  vi.mocked(useQuietThreadShells).mockReturnValue(threads);
+  stack.defer(() => vi.mocked(useQuietThreadShells).mockRestore());
+  vi.mocked(useHandleNewThread).mockReturnValue({
+    activeDraftThread: null,
+    activeThread: null,
+    defaultProjectRef: null,
+    handleNewThread: vi.fn(),
+    routeDraftId: null,
+    routeThreadRef: null,
+  });
+  await using screen = await render(
+    <SidebarProvider>
+      <Sidebar routeReveal={{ observedKey: null, pendingKey: null }} />
+    </SidebarProvider>,
+  );
+  const shelf = screen.getByRole("button", { name: /^Working\s*3$/ });
+  await expect.element(shelf).toBeVisible();
+  if (shelf.element().getAttribute("aria-expanded") === "false") await userEvent.click(shelf);
+  const taskOrder = () =>
+    [...screen.container.querySelectorAll<HTMLElement>("[data-sidebar-row]")]
+      .map((row) => row.getAttribute("aria-label"))
+      .filter((label) => label?.startsWith("Working task"));
+  const flatOrder = taskOrder();
+  expect(flatOrder).toHaveLength(3);
+  await userEvent.click(
+    screen.getByRole("button", { name: "Group threads by project", exact: true }),
+  );
+  await expect
+    .element(
+      screen.getByRole("button", { name: "alpha: actions for 2 working threads", exact: true }),
+    )
+    .toBeVisible();
+  expect(taskOrder()).toEqual([flatOrder[0], flatOrder[2], flatOrder[1]]);
+  await userEvent.click(
+    screen.getByRole("button", { name: "Group threads by project", exact: true }),
+  );
+  await expect
+    .element(screen.getByRole("button", { name: "Group threads by project", exact: true }))
+    .toHaveAttribute("aria-pressed", "false");
+  expect(taskOrder()).toEqual(flatOrder);
 });
