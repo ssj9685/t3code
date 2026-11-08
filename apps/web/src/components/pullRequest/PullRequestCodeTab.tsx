@@ -25,7 +25,6 @@ import {
   MessageSquareOffIcon,
   PilcrowIcon,
   Rows3Icon,
-  Settings2Icon,
   TextWrapIcon,
   TriangleAlertIcon,
 } from "lucide-react";
@@ -81,6 +80,7 @@ import { pullRequestEnvironment } from "~/state/pullRequests";
 import { useEnvironmentQuery } from "~/state/query";
 import { useAtomCommand } from "~/state/use-atom-command";
 
+import { DiffOptionsMenu } from "../diffs/DiffOptionsMenu";
 import { DiffPanelLoadingState } from "../DiffPanelShell";
 import { useDiffWorkerPool } from "../DiffWorkerPoolProvider";
 import { DiffCommentAnnotation } from "../diffs/DiffCommentAnnotation";
@@ -96,12 +96,10 @@ import { Checkbox } from "../ui/checkbox";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../ui/menu";
 import { toastManager } from "../ui/toast";
@@ -1094,7 +1092,7 @@ function PullRequestCodeTab({
     setSelectedLines(null);
   };
   const toolbar = (
-    <div className="@container flex h-10 min-h-10 shrink-0 items-center justify-between gap-2 border-b border-border/60 bg-background px-4 text-xs text-muted-foreground">
+    <div className="@container/diff-toolbar flex h-10 min-h-10 shrink-0 items-center justify-between gap-2 border-b border-border/60 bg-background px-4 text-xs text-muted-foreground">
       <div className="flex min-w-0 flex-1 items-center gap-3">
         {orderedCommits.length > 0 ? (
           <DropdownMenu>
@@ -1235,53 +1233,33 @@ function PullRequestCodeTab({
         </PullRequestMetaLine>
       </div>
       <div className="flex shrink-0 items-center gap-1">
-        <DropdownMenu>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <DropdownMenuTrigger
-                  render={<Button size="icon-sm" variant="ghost" />}
-                  className="@lg:hidden"
-                  aria-label="Diff options"
-                />
-              }
-            >
-              <Settings2Icon className="size-3.5" />
-            </TooltipTrigger>
-            <TooltipPopup side="top">Diff options</TooltipPopup>
-          </Tooltip>
-          <DropdownMenuContent align="end">
-            <DropdownMenuCheckboxItem
-              checked={ignoreWhitespace}
-              onCheckedChange={(checked) => changeIgnoreWhitespace(checked)}
-            >
-              Hide whitespace changes
-            </DropdownMenuCheckboxItem>
-            <DropdownMenuCheckboxItem
-              checked={wordWrap}
-              onCheckedChange={(checked) => setWordWrap(checked)}
-            >
-              Wrap lines
-            </DropdownMenuCheckboxItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuRadioGroup
-              value={diffLayout}
-              onValueChange={(value) => {
-                if (value === "stacked" || value === "split") {
-                  updateClientSettings({ diffLayout: value });
+        <DiffOptionsMenu
+          wordWrap={wordWrap}
+          onWordWrapChange={setWordWrap}
+          ignoreWhitespace={ignoreWhitespace}
+          onIgnoreWhitespaceChange={changeIgnoreWhitespace}
+          diffLayout={diffLayout}
+          onDiffLayoutChange={(value) => updateClientSettings({ diffLayout: value })}
+          files={
+            fileKeys.length > 0
+              ? {
+                  collapsed: allFilesCollapsed,
+                  onToggleCollapsed: toggleAllFiles,
+                  treeOpen: fileTreeOpen,
+                  onTreeOpenChange: setFileTreeOpen,
                 }
-              }}
-            >
-              <DropdownMenuRadioItem value="stacked" closeOnClick>
-                Stacked
-              </DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="split" closeOnClick>
-                Split
-              </DropdownMenuRadioItem>
-            </DropdownMenuRadioGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <div className="hidden items-center gap-1 @lg:flex">
+              : null
+          }
+          testFiles={
+            testFileCount > 0
+              ? {
+                  hidden: hideTestFiles,
+                  onHiddenChange: setHideTestFiles,
+                }
+              : null
+          }
+        />
+        <div className="hidden items-center gap-1 @min-[36rem]/diff-toolbar:flex">
           <Tooltip>
             <TooltipTrigger
               render={
@@ -1341,70 +1319,70 @@ function PullRequestCodeTab({
               {wordWrap ? "Disable line wrapping" : "Enable line wrapping"}
             </TooltipPopup>
           </Tooltip>
+          {fileKeys.length > 0 ? (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label={allFilesCollapsed ? "Expand all files" : "Collapse all files"}
+                    onClick={toggleAllFiles}
+                  />
+                }
+              >
+                <MorphIcon
+                  className="size-3.5"
+                  icon={allFilesCollapsed ? ChevronsUpDown : ChevronsDownUp}
+                />
+              </TooltipTrigger>
+              <TooltipPopup side="top">
+                {allFilesCollapsed ? "Expand all files" : "Collapse all files"}
+              </TooltipPopup>
+            </Tooltip>
+          ) : null}
+          {testFileCount > 0 ? (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Toggle
+                    aria-label="Hide test files"
+                    variant="ghost"
+                    size="sm"
+                    pressed={hideTestFiles}
+                    onPressedChange={(pressed) => setHideTestFiles(Boolean(pressed))}
+                  />
+                }
+              >
+                <FlaskConicalOffIcon className="size-3.5" />
+              </TooltipTrigger>
+              <TooltipPopup side="top">
+                {hideTestFiles ? "Show test files" : "Hide test files"}
+              </TooltipPopup>
+            </Tooltip>
+          ) : null}
+          {fileKeys.length > 0 ? (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Toggle
+                    aria-label={fileTreeOpen ? "Hide file tree" : "Show file tree"}
+                    variant="ghost"
+                    size="sm"
+                    pressed={fileTreeOpen}
+                    onPressedChange={(pressed) => setFileTreeOpen(Boolean(pressed))}
+                  />
+                }
+              >
+                <FolderTreeIcon className="size-3.5" />
+              </TooltipTrigger>
+              <TooltipPopup side="top">
+                {fileTreeOpen ? "Hide file tree" : "Show file tree"}
+              </TooltipPopup>
+            </Tooltip>
+          ) : null}
         </div>
-        {fileKeys.length > 0 ? (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  type="button"
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label={allFilesCollapsed ? "Expand all files" : "Collapse all files"}
-                  onClick={toggleAllFiles}
-                />
-              }
-            >
-              <MorphIcon
-                className="size-3.5"
-                icon={allFilesCollapsed ? ChevronsUpDown : ChevronsDownUp}
-              />
-            </TooltipTrigger>
-            <TooltipPopup side="top">
-              {allFilesCollapsed ? "Expand all files" : "Collapse all files"}
-            </TooltipPopup>
-          </Tooltip>
-        ) : null}
-        {testFileCount > 0 ? (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Toggle
-                  aria-label="Hide test files"
-                  variant="ghost"
-                  size="sm"
-                  pressed={hideTestFiles}
-                  onPressedChange={(pressed) => setHideTestFiles(Boolean(pressed))}
-                />
-              }
-            >
-              <FlaskConicalOffIcon className="size-3.5" />
-            </TooltipTrigger>
-            <TooltipPopup side="top">
-              {hideTestFiles ? "Show test files" : "Hide test files"}
-            </TooltipPopup>
-          </Tooltip>
-        ) : null}
-        {fileKeys.length > 0 ? (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Toggle
-                  aria-label={fileTreeOpen ? "Hide file tree" : "Show file tree"}
-                  variant="ghost"
-                  size="sm"
-                  pressed={fileTreeOpen}
-                  onPressedChange={(pressed) => setFileTreeOpen(Boolean(pressed))}
-                />
-              }
-            >
-              <FolderTreeIcon className="size-3.5" />
-            </TooltipTrigger>
-            <TooltipPopup side="top">
-              {fileTreeOpen ? "Hide file tree" : "Show file tree"}
-            </TooltipPopup>
-          </Tooltip>
-        ) : null}
       </div>
     </div>
   );
