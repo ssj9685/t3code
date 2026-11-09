@@ -452,16 +452,9 @@ export function SortableThreadRow(
   },
 ) {
   const { sortableId, sortableDisabled, contextDrag, ...rowProps } = props;
-  const canOperateThread = useEnvironmentScope(
-    rowProps.thread.environmentId,
-    AuthOrchestrationOperateScope,
-  );
   const { listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: sortableId,
-    disabled:
-      sortableDisabled || !canOperateThread
-        ? SIDEBAR_SORTABLE_DRAG_DISABLED
-        : SIDEBAR_SORTABLE_DRAG_ENABLED,
+    disabled: sortableDisabled ? SIDEBAR_SORTABLE_DRAG_DISABLED : SIDEBAR_SORTABLE_DRAG_ENABLED,
     animateLayoutChanges: animateSidebarLayoutChanges,
   });
   // dnd-kit memoizes each field but not the bag, so the memoized row would
@@ -470,7 +463,7 @@ export function SortableThreadRow(
     listeners,
     setNodeRef,
     transform: contextDrag ? null : transform,
-    transition: contextDrag && isDragging ? "transform 150ms ease-out" : transition,
+    transition: contextDrag ? undefined : transition,
     isDragging: isDragging && !contextDrag,
   };
   // The sidebar arranges rows from quiet shells, which hold still while a
@@ -533,10 +526,10 @@ function TopStatusIcon(props: { icon: keyof typeof TOP_STATUS_ICONS; className: 
 
 type SidebarThreadRowProps = {
   thread: SidebarThreadSummary;
-  // "folder" is a one-line row inside a boring sidebar project folder;
-  // "folder-multiline" adds the card's branch and PR line under it.
-  variant: "card" | "slim" | "folder" | "folder-multiline";
+  // "compact" is a one-line row inside a boring sidebar project folder;
+  variant: "card" | "slim" | "compact" | "compact-multiline";
   navigationParent?: string | undefined;
+  groupDropTarget?: boolean;
   variantAction: SidebarSweepAction;
   settlementSupported: boolean;
   snoozeSupported: boolean;
@@ -948,6 +941,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   };
 
   const rowSurfaceClassName = cn(
+    props.groupDropTarget && "ring-2 ring-inset ring-ring bg-sidebar-row-active",
     "group/sidebar-row relative w-full cursor-pointer overflow-hidden rounded-md text-left outline-none select-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
     variantAction === "unsettle" &&
       !props.isActive &&
@@ -1194,8 +1188,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   ) : null;
 
   if (variant !== "card") {
-    const multiline = variant === "folder-multiline";
-    const inFolder = variant === "folder" || multiline;
+    const multiline = variant === "compact-multiline";
+    const compact = variant === "compact" || multiline;
     return (
       <li
         data-thread-item={threadKey}
@@ -1203,11 +1197,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
         {...(fileDropHandlers ?? {})}
         className={cn(
           "list-none [content-visibility:auto] [contain-intrinsic-size:auto_--spacing(9)]",
+          props.navigationParent?.startsWith("group:") &&
+            "ml-3 border-l border-sidebar-border/60 pl-1",
           metaLine !== null && multiline && "[contain-intrinsic-size:auto_--spacing(13.5)]",
           sortable?.isDragging && "relative z-20",
         )}
       >
-        <Tooltip disabled={sortable?.isDragging}>
+        <Tooltip disabled={snoozeMenuOpen || sortable?.isDragging}>
           <TooltipTrigger
             render={
               <div
@@ -1218,15 +1214,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                 data-sidebar-parent={props.navigationParent}
                 aria-label={accessibility.label}
                 aria-current={accessibility.current}
-                data-testid={inFolder ? "sidebar-row-folder" : "sidebar-row-slim"}
+                data-testid={compact ? "sidebar-row-compact" : "sidebar-row-slim"}
                 aria-busy={isRegeneratingTitle || undefined}
                 className={cn(
                   rowSurfaceClassName,
                   multiline
                     ? "flex flex-col justify-center px-2.5 py-1.5"
                     : "flex h-9 items-center gap-2.5 px-2.5",
-                  // Lines titles up with the folder name, past its chevron and icon.
-                  inFolder && "ps-9",
                 )}
                 onClick={handleClick}
                 onDoubleClick={handleDoubleClick}
@@ -1238,7 +1232,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
             {/* `contents` keeps one-line rows a single flex row. */}
             <div className={multiline ? "flex h-6 min-w-0 items-center gap-2.5" : "contents"}>
               {accessibleTitle}
-              {inFolder ? null : (
+              {
                 <span
                   className={cn(
                     "flex shrink-0 items-center transition-opacity",
@@ -1250,7 +1244,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                     <ProjectFavicon project={props.project} className="size-4" />
                   ) : null}
                 </span>
-              )}
+              }
               {draftIndicator}
               {title}
               {multiline ? titleLineIcons : null}
@@ -1267,6 +1261,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                 <span
                   className={cn(
                     "relative ml-auto flex h-6 min-w-8 shrink-0 items-center justify-end",
+                    showSnoozeButton &&
+                      variantAction !== "unsnooze" &&
+                      "group-any-hover/sidebar-row:min-w-14 has-[:focus-visible]:min-w-14",
+                    snoozeMenuOpen && "min-w-14",
                     props.sweepAction !== null && "hidden",
                     jumpHintLabel && JUMP_HINT_SLOT_CLASS_NAME,
                   )}
@@ -1275,6 +1273,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                     className={cn(
                       "inline-flex justify-end tabular-nums text-secondary-label transition-opacity",
                       !isWoke && "group-any-hover/sidebar-row:opacity-0",
+                      snoozeMenuOpen && "opacity-0",
                     )}
                   >
                     {variantAction === "unsnooze" && props.snoozeWakeLabelText !== null ? (
@@ -1283,7 +1282,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                         <AlarmClockIcon aria-hidden className="size-3" />
                         {props.snoozeWakeLabelText}
                       </span>
-                    ) : (inFolder ? isWokeStatus : isWoke) ? (
+                    ) : (compact ? isWokeStatus : isWoke) ? (
                       <Tooltip>
                         <TooltipTrigger
                           render={
@@ -1300,8 +1299,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                         />
                         <TooltipPopup side="top">Dismiss Woke notification</TooltipPopup>
                       </Tooltip>
-                    ) : inFolder && topStatus ? (
-                      // Folder rows have no status line, so the status takes the time slot.
+                    ) : compact && topStatus ? (
+                      // Compact rows have no status line, so the status takes the time slot.
                       <span
                         className={cn(
                           "inline-flex items-center gap-1 text-xs font-medium",
@@ -1323,6 +1322,22 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                       </span>
                     )}
                   </span>
+                  {showSnoozeButton && variantAction !== "unsnooze" ? (
+                    <span
+                      className={cn(
+                        "pointer-events-none absolute inset-y-0 right-6 flex items-stretch opacity-0 has-[:focus-visible]:pointer-events-auto has-[:focus-visible]:opacity-100 group-any-hover/sidebar-row:pointer-events-auto group-any-hover/sidebar-row:opacity-100",
+                        snoozeMenuOpen && "pointer-events-auto opacity-100",
+                      )}
+                    >
+                      <SnoozeMenuButton
+                        open={snoozeMenuOpen}
+                        onOpenChange={setSnoozeMenuOpen}
+                        onSnooze={handleSnoozePreset}
+                        timestampFormat={props.timestampFormat}
+                        environmentId={thread.environmentId}
+                      />
+                    </span>
+                  ) : null}
                   {variantAction === "unsnooze" ? (
                     !props.snoozeSupported ? null : (
                       <button
@@ -1399,6 +1414,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       {...(fileDropHandlers ?? {})}
       className={cn(
         "list-none py-0.5 [content-visibility:auto] [contain-intrinsic-size:auto_78px]",
+        props.navigationParent?.startsWith("group:") &&
+          "ml-3 border-l border-sidebar-border/60 pl-1",
         metaLineEmpty && "[contain-intrinsic-size:auto_58px]",
         sortable?.isDragging && "relative z-20",
       )}

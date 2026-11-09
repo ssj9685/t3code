@@ -966,6 +966,7 @@ export function groupSidebarThreadsByProject<
   return folders.filter((folder) => folder.threads.length > 0 || keepEmpty(folder.group));
 }
 
+// Shelves keep the first thread's priority for each project, including across environments.
 export type SidebarV2TopStatusKind =
   | "approval"
   | "done"

@@ -1,4 +1,4 @@
-const motionTiming = { duration: 150, easing: "ease-out" };
+const motionTiming = { duration: 200, easing: "cubic-bezier(0.15, 1, 0.3, 1)" };
 const rowTravel = (height: number) => Math.min(height, 40);
 // Fades clone removed rows and animate clones and entries; intervening layout reads force reflows.
 const MAX_FADED_ROWS_PER_UPDATE = 40;
@@ -118,6 +118,14 @@ export function createSidebarListMotion(parent: HTMLUListElement) {
   };
 
   return {
+    targetRect(element: HTMLElement) {
+      const rect = element.getBoundingClientRect();
+      const row = element.closest("li");
+      if (!row || row.parentElement !== parent) return rect;
+      const scale =
+        parent.offsetWidth > 0 ? parent.getBoundingClientRect().width / parent.offsetWidth : 1;
+      return new DOMRect(rect.x, rect.y - remainingOffset(row) * scale, rect.width, rect.height);
+    },
     update(animate: boolean) {
       if (disposed) return;
       const next = new Map(
@@ -229,13 +237,14 @@ export function createSidebarListMotion(parent: HTMLUListElement) {
       positions = next;
     },
     release() {
-      suspend();
       const origin = parent.getBoundingClientRect().top;
-      released = new Map(
+      const snapshot = new Map(
         Array.from(parent.children)
           .filter((node): node is HTMLElement => node instanceof HTMLElement && !exiting.has(node))
           .map((node) => [node, node.getBoundingClientRect().top - origin]),
       );
+      suspend();
+      released = snapshot;
     },
     suspend,
     dispose() {

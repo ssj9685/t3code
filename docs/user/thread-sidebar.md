@@ -6,7 +6,7 @@ need a separate branch and working directory.
 ## Start a thread
 
 On web and desktop, **New thread** opens the project picker when you have multiple
-projects in the default or project-grouped sidebar. The legacy sidebar always
+projects in the default or compact sidebar. The legacy sidebar always
 starts in the current project. **Shift-click** to start in
 the current project, or use a project's own new-thread action. A new thread carries
 your model and mode selections, unless the destination project has its own model default.
@@ -95,14 +95,14 @@ edge to pin a thread. Section labels stay readable for the whole drag, and the s
 thread is over takes the accent color. Section labels also
 identify empty sections and a collapsed settled shelf.
 
-Drag within the pinned or active section to change its order. Other rows slide aside to show the
-spot where the thread will land. Drops into either section keep the position you choose. On
+On web and desktop, drag a task or group within its section to change its position. Drop at a
+row’s top or bottom edge when space opens between the surrounding rows. This order is saved on this client. On
 mobile, open a thread's menu and choose **Arrange threads**. Drag a handle within or between
 **Pinned** and **Active** to reorder, pin, or unpin. Drop onto the **Settled** divider to
 settle a thread. The dragged card shows the action before you release it. Expand **Snoozed**
 or **Settled** to drag a parked thread back into either live section. Each drop saves; close the sheet to return to the thread list.
-**Move up** and **Move down** are also available in the thread menu. The server
-saves the order, so it survives a refresh and appears on your other connected devices.
+On mobile, **Move up** and **Move down** are also available in the thread menu. The server
+saves that order, so it survives a refresh and appears on your other connected mobile devices.
 
 On web and desktop, the list also animates section changes made with thread actions such as
 **Pin**, **Settle**, and **Snooze**. These transitions respect your system's reduced-motion
@@ -145,19 +145,34 @@ This is on by default. Turn it off with **Settings → General → Working secti
 or **Settings → General → Working section** on iOS and Android. Each device keeps its own
 choice.
 
-While this is on, the active list is ordered by when each thread last came back to you, so you
-cannot drag or move threads within it. Your saved order returns when you turn it off.
+While this is on, the active list defaults to when each thread last came back to you. Web and
+desktop also let you arrange tasks and groups manually within each section. Use **Reset to
+automatic order** in the sidebar context menu to return to the default.
 
-### Group threads by project (beta)
+### Group chosen tasks
 
-Turn on **Settings → Labs → Boring sidebar (group by project)** on web and desktop to put active
-threads in a folder for each project. Pinned projects come first. A project with no active
-threads has no folder unless it is pinned or you pick it in the project filter. An archived
-project's folder comes last and shows only while it has active threads. Click a folder to open or
-close it. A closed folder shows how many threads it holds, and a dot when one of them
-needs you. Use the pen button on a folder, or right-click it, to start a thread in that project.
-Pinned threads stay above the folders, and Snoozed and Settled stay below them. In this mode you
-cannot drag threads, and the Working section is off. Each device keeps its own choice.
+Threads start individually. Drag a task onto the middle of another task to create a group,
+or onto the middle of a group heading to add it. Drop near a row’s top or bottom to insert
+a task at that position, inside or outside a group. You can also select tasks with Command-click (Control-click on Windows/Linux),
+then choose **Group selected threads** in the sidebar or selection menu. Groups can contain
+chosen tasks from different projects; sharing a project does not group tasks automatically.
+
+Right-click the list, a task, or a group and choose **Sort folders first, then by name** to
+organize the displayed tasks. You can move them again afterward or reset to automatic order.
+Hover over a group to see the projects represented by its loaded members, even when a project
+filter hides some of them. Mixed groups show a project count on their folder icon.
+
+Click a group heading to collapse or expand it. Its menu can rename the group, ungroup its tasks,
+or snooze, wake, settle, and restore the group's loaded tasks across all status sections.
+The action count is the number affected, including loaded members hidden by a project filter;
+threads unavailable from disconnected environments or not loaded are excluded. Individual task
+state changes keep group membership, so one group may appear in several sections.
+
+To remove a task, use **Remove from group** in its menu or drag it to the removal area shown
+while dragging. Removing a group does not delete its tasks or change their states. Groups are
+one level deep and saved on this client; they do not sync to another browser, device, or the
+native mobile app. **Settings → Labs → Compact sidebar** changes row density without creating
+automatic project groups.
 
 ## Settle finished work
 
