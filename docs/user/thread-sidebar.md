@@ -96,7 +96,7 @@ thread is over takes the accent color. Section labels also
 identify empty sections and a collapsed settled shelf.
 
 On web and desktop, drag a task or group within its section to change its position. Drop at a
-row’s top or bottom edge when the insertion line appears. This order is saved on this client. On
+row’s top or bottom edge when space opens between the surrounding rows. This order is saved on this client. On
 mobile, open a thread's menu and choose **Arrange threads**. Drag a handle within or between
 **Pinned** and **Active** to reorder, pin, or unpin. Drop onto the **Settled** divider to
 settle a thread. The dragged card shows the action before you release it. Expand **Snoozed**

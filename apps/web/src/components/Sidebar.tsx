@@ -1072,6 +1072,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     readonly contextDrag: boolean;
   } | null>(null);
   const dragSensorRef = useRef<SidebarPointerSensor | null>(null);
+  const dragHintRef = useRef<HTMLDivElement | null>(null);
   const contextDragKeyRef = useRef<string | null>(null);
   const dragScrollRef = useRef<{ readonly viewport: Element; readonly top: number } | null>(null);
   const [actionSweep, setActionSweep] = useState<{
@@ -1792,86 +1793,115 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       ]),
     ]),
   ];
-  const manualDropAt = (point: { x: number; y: number }): NonNullable<typeof manualDrop> | null => {
-    const source = contextDragKeyRef.current;
-    const list = threadListRef.current;
-    if (!source || !list || pointerOutsideThreadList(point)) return null;
-    const sourceGroup = groupDragSource(source);
-    const sourceSection = sourceGroup?.section ?? sectionByThreadKey.get(source);
-    const selected = useThreadSelectionStore.getState().selectedThreadKeys;
-    const moving = selected.has(source) ? selected : new Set([source]);
-    for (const element of list.querySelectorAll<HTMLElement>(
-      "[data-group-drop], [data-thread-group], [data-sidebar-row]",
-    )) {
-      const rect = element.getBoundingClientRect();
+  const manualDropAt = useStableCallback(
+    (point: { x: number; y: number }): NonNullable<typeof manualDrop> | null => {
+      const source = contextDragKeyRef.current;
+      const list = threadListRef.current;
+      if (!source || !list || pointerOutsideThreadList(point)) return null;
+      const sourceGroup = groupDragSource(source);
+      const containsPoint = (element: Element | null) => {
+        const rect = element?.getBoundingClientRect();
+        return (
+          rect &&
+          point.x >= rect.left &&
+          point.x <= rect.right &&
+          point.y >= rect.top &&
+          point.y <= rect.bottom
+        );
+      };
+      if (!sourceGroup && containsPoint(dragHintRef.current))
+        return { kind: "ungroup", id: "ungroup", label: "Remove from group" };
+      // Keep the opened space a stable target while surrounding rows animate away.
       if (
-        point.x < rect.left ||
-        point.x > rect.right ||
-        point.y < rect.top ||
-        point.y > rect.bottom
+        manualDrop?.kind === "reorder" &&
+        containsPoint(list.querySelector("[data-sidebar-drop-space]"))
       )
-        continue;
-      if (!sourceGroup && element.dataset.groupDrop === "ungroup")
-        return { kind: "ungroup" as const, id: "ungroup", label: "Remove from group" };
-      const groupId = element.dataset.threadGroup;
-      const rowKey = element.dataset.sidebarRow;
-      const destinationGroup = groupId
-        ? threadGroups.find((group) => group.id === groupId)
-        : threadGroups.find((group) => group.threadKeys.includes(rowKey ?? ""));
-      const targetSection = groupId
-        ? groupDragSource(
-            element.querySelector<HTMLElement>("[data-sidebar-row]")?.dataset.sidebarRow ?? "",
-          )?.section
-        : sectionByThreadKey.get(rowKey ?? "");
-      const edge = point.y < rect.top + rect.height / 4 || point.y > rect.bottom - rect.height / 4;
-      if ((sourceGroup || edge) && sourceSection === targetSection && targetSection) {
-        const targetId =
-          groupId || (sourceGroup && destinationGroup) ? `group:${destinationGroup!.id}` : rowKey;
+        return manualDrop;
+      const layoutY = (element: HTMLElement, after: boolean) => {
+        const rect = element.getBoundingClientRect();
+        const root = element.closest("li");
+        const translate = root ? getComputedStyle(root).translate.split(" ")[1] : undefined;
+        const scale =
+          list.offsetWidth > 0 ? list.getBoundingClientRect().width / list.offsetWidth : 1;
+        return (
+          (after ? rect.bottom : rect.top) - (Number.parseFloat(translate ?? "0") || 0) * scale
+        );
+      };
+      const sourceSection = sourceGroup?.section ?? sectionByThreadKey.get(source);
+      const selected = useThreadSelectionStore.getState().selectedThreadKeys;
+      const moving = selected.has(source) ? selected : new Set([source]);
+      for (const element of list.querySelectorAll<HTMLElement>(
+        "[data-thread-group], [data-sidebar-row]",
+      )) {
+        const rect = element.getBoundingClientRect();
         if (
-          targetId &&
-          (sourceGroup ? targetId !== `group:${sourceGroup.group.id}` : !moving.has(targetId))
-        ) {
-          const after = point.y > rect.top + rect.height / 2;
-          let lineY = after ? rect.bottom : rect.top;
-          if (targetId.startsWith("group:") && destinationGroup) {
-            const parent = `group:${targetSection}:${destinationGroup.id}`;
-            for (const row of list.querySelectorAll<HTMLElement>("[data-sidebar-row]")) {
-              if (!after && row.dataset.sidebarRow === parent)
-                lineY = row.getBoundingClientRect().top;
-              if (after && row.dataset.sidebarParent === parent)
-                lineY = Math.max(lineY, row.getBoundingClientRect().bottom);
+          point.x < rect.left ||
+          point.x > rect.right ||
+          point.y < rect.top ||
+          point.y > rect.bottom
+        )
+          continue;
+        const groupId = element.dataset.threadGroup;
+        const rowKey = element.dataset.sidebarRow;
+        const destinationGroup = groupId
+          ? threadGroups.find((group) => group.id === groupId)
+          : threadGroups.find((group) => group.threadKeys.includes(rowKey ?? ""));
+        const targetSection = groupId
+          ? groupDragSource(
+              element.querySelector<HTMLElement>("[data-sidebar-row]")?.dataset.sidebarRow ?? "",
+            )?.section
+          : sectionByThreadKey.get(rowKey ?? "");
+        const edge =
+          point.y < rect.top + rect.height / 4 || point.y > rect.bottom - rect.height / 4;
+        if ((sourceGroup || edge) && sourceSection === targetSection && targetSection) {
+          const targetId =
+            groupId || (sourceGroup && destinationGroup) ? `group:${destinationGroup!.id}` : rowKey;
+          if (
+            targetId &&
+            (sourceGroup ? targetId !== `group:${sourceGroup.group.id}` : !moving.has(targetId))
+          ) {
+            const after = point.y > rect.top + rect.height / 2;
+            let lineY = layoutY(element, after);
+            if (targetId.startsWith("group:") && destinationGroup) {
+              const parent = `group:${targetSection}:${destinationGroup.id}`;
+              for (const row of list.querySelectorAll<HTMLElement>("[data-sidebar-row]")) {
+                if (!after && row.dataset.sidebarRow === parent) lineY = layoutY(row, false);
+                if (after && row.dataset.sidebarParent === parent)
+                  lineY = Math.max(lineY, layoutY(row, true));
+              }
             }
+            return {
+              kind: "reorder" as const,
+              id: targetId,
+              section: targetSection,
+              after,
+              groupId: sourceGroup || groupId ? undefined : destinationGroup?.id,
+              lineTop: lineY - list.getBoundingClientRect().top,
+              label: "Move here",
+            };
           }
-          return {
-            kind: "reorder" as const,
-            id: targetId,
-            section: targetSection,
-            after,
-            groupId: sourceGroup || groupId ? undefined : destinationGroup?.id,
-            lineTop: lineY - list.getBoundingClientRect().top,
-            label: "Move here",
-          };
         }
+        if (sourceGroup) continue;
+        if (groupId) {
+          const group = threadGroups.find((group) => group.id === groupId);
+          if (group && [...moving].some((key) => !group.threadKeys.includes(key)))
+            return { kind: "group" as const, id: groupId, label: `Add to ${group.name}` };
+        }
+        const key = element.dataset.sidebarRow;
+        if (!key || moving.has(key) || !threadByKeyRef.current.has(key)) continue;
+        // The middle half groups; the edges retain the existing sort and status-drop gesture.
+        if (point.y < rect.top + rect.height / 4 || point.y > rect.bottom - rect.height / 4)
+          continue;
+        const group = threadGroups.find((group) => group.threadKeys.includes(key));
+        if (group) {
+          if ([...moving].every((key) => group.threadKeys.includes(key))) continue;
+          return { kind: "group" as const, id: group.id, label: `Add to ${group.name}` };
+        }
+        return { kind: "thread" as const, id: key, label: "Create task group" };
       }
-      if (sourceGroup) continue;
-      if (groupId) {
-        const group = threadGroups.find((group) => group.id === groupId);
-        if (group && [...moving].some((key) => !group.threadKeys.includes(key)))
-          return { kind: "group" as const, id: groupId, label: `Add to ${group.name}` };
-      }
-      const key = element.dataset.sidebarRow;
-      if (!key || moving.has(key) || !threadByKeyRef.current.has(key)) continue;
-      // The middle half groups; the edges retain the existing sort and status-drop gesture.
-      if (point.y < rect.top + rect.height / 4 || point.y > rect.bottom - rect.height / 4) continue;
-      const group = threadGroups.find((group) => group.threadKeys.includes(key));
-      if (group) {
-        if ([...moving].every((key) => group.threadKeys.includes(key))) continue;
-        return { kind: "group" as const, id: group.id, label: `Add to ${group.name}` };
-      }
-      return { kind: "thread" as const, id: key, label: "Create task group" };
-    }
-    return null;
-  };
+      return null;
+    },
+  );
   const dropManualGroup = (point: { x: number; y: number }) => {
     const target = manualDropAt(point);
     const source = contextDragKeyRef.current;
@@ -3694,7 +3724,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                     // controls.
                     role="presentation"
                     className={cn(
-                      "relative flex flex-col gap-px",
+                      "relative flex flex-col gap-px motion-reduce:[&>li]:transition-none! [&>li[data-sidebar-drop-space]~li]:translate-y-10",
+                      dragState !== null &&
+                        "[&>li]:transition-[translate] [&>li]:duration-150 [&>li]:ease-out",
                       sidebarListItems.length > 0 && "flex-1",
                       actionSweep !== null && "**:pointer-events-none",
                       // Projected rows (two boundary labels, two hints) extend the scroll range; a range that
@@ -3703,29 +3735,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                         "after:pointer-events-none after:absolute after:inset-x-0 after:-bottom-30 after:h-px after:content-['']",
                     )}
                   >
-                    {manualDrop?.kind === "reorder" ? (
-                      <li
-                        aria-hidden
-                        className="pointer-events-none absolute inset-x-0 z-40 h-0.5 list-none bg-ring"
-                        style={{ top: manualDrop.lineTop }}
-                      />
-                    ) : null}
-                    {dragState !== null ? (
-                      <li
-                        className="sticky top-0 z-30 list-none rounded-md border border-sidebar-border bg-sidebar px-3 py-2 text-xs"
-                        data-sidebar-drag-hint
-                        data-group-drop={
-                          groupDragSource(dragState.activeKey) ? undefined : "ungroup"
-                        }
-                      >
-                        <span role="status">
-                          {manualDrop?.label ??
-                            (groupDragSource(dragState.activeKey)
-                              ? "Drag folder to a new position"
-                              : "Drop here to remove from group")}
-                        </span>
-                      </li>
-                    ) : null}
                     {(() => {
                       const renderThreadRow = (
                         thread: EnvironmentThreadShell,
@@ -3858,6 +3867,28 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                           onDraftContextMenu={handleDraftContextMenu}
                         />,
                       ];
+                      const addDropSpace = (
+                        id: string,
+                        section: SidebarSection,
+                        after: boolean,
+                      ) => {
+                        if (
+                          manualDrop?.kind !== "reorder" ||
+                          manualDrop.id !== id ||
+                          manualDrop.section !== section ||
+                          manualDrop.after !== after
+                        )
+                          return;
+                        items.push(
+                          <li
+                            key="manual-drop-space"
+                            data-sidebar-drop-space
+                            aria-hidden
+                            className="pointer-events-none absolute inset-x-0 z-10 h-10 list-none rounded-md border border-dashed border-ring/40 bg-sidebar-row-hover"
+                            style={{ top: manualDrop.lineTop }}
+                          />,
+                        );
+                      };
                       const renderedGroupSections = new Set<SidebarSection>();
                       for (const item of sidebarListItems) {
                         if (item.kind === "thread") {
@@ -3867,6 +3898,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                             const rowId = bucket.rowId;
                             if (bucket.group && rowId) {
                               const group = bucket.group;
+                              addDropSpace(`group:${group.id}`, item.section, false);
                               items.push(
                                 <SidebarThreadGroupHeader
                                   key={rowId}
@@ -3896,8 +3928,13 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                 />,
                               );
                             }
-                            for (const thread of bucket.visibleThreads)
+                            for (const thread of bucket.visibleThreads) {
+                              addDropSpace(threadShellKey(thread), item.section, false);
                               items.push(renderThreadRow(thread, item.section, rowId));
+                              addDropSpace(threadShellKey(thread), item.section, true);
+                            }
+                            if (bucket.group)
+                              addDropSpace(`group:${bucket.group.id}`, item.section, true);
                           }
                           continue;
                         }
@@ -4073,6 +4110,21 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           ) : null}
         </SidebarGroup>
       </SidebarContent>
+      {dragState !== null ? (
+        <div
+          ref={dragHintRef}
+          className="shrink-0 border-t border-sidebar-border bg-sidebar px-3 py-2 text-xs"
+          data-sidebar-drag-hint
+          data-group-drop={groupDragSource(dragState.activeKey) ? undefined : "ungroup"}
+        >
+          <span role="status">
+            {manualDrop?.label ??
+              (groupDragSource(dragState.activeKey)
+                ? "Drag folder to a new position"
+                : "Drop here to remove from group")}
+          </span>
+        </div>
+      ) : null}
       <SidebarChromeFooter />
     </>
   );

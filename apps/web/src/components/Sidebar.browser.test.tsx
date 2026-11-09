@@ -1,3 +1,4 @@
+import "../index.css";
 import {
   DEFAULT_CLIENT_SETTINGS,
   EnvironmentId,
@@ -79,7 +80,9 @@ describe("sidebar header new thread", () => {
     vi.mocked(openCommandPalette).mockClear();
     await using screen = await render(
       <SidebarProvider>
-        <Sidebar routeReveal={{ observedKey: null, pendingKey: null }} />
+        <div className="flex h-screen w-80 flex-col">
+          <Sidebar routeReveal={{ observedKey: null, pendingKey: null }} />
+        </div>
       </SidebarProvider>,
     );
 
@@ -154,7 +157,9 @@ it.each(["selection", "drag"])(
     });
     await using screen = await render(
       <SidebarProvider>
-        <Sidebar routeReveal={{ observedKey: null, pendingKey: null }} />
+        <div className="flex h-screen w-80 flex-col">
+          <Sidebar routeReveal={{ observedKey: null, pendingKey: null }} />
+        </div>
       </SidebarProvider>,
     );
     const shelf = screen.getByRole("button", { name: new RegExp(`^${section}\\s*3$`) });
@@ -296,7 +301,15 @@ it.each(["selection", "drag"])(
       );
       await expect.element(group).toBeVisible();
       expect(taskOrder()).toHaveLength(3);
-      const reorder = async (source: Element, target: Element, after: boolean) => {
+      const reorder = async (source: Element, target: Element, after: boolean, cancel = false) => {
+        // Choose the next drag's coordinates after the previous drop has settled.
+        await vi.waitFor(() => {
+          expect(
+            [...screen.container.querySelectorAll("li")]
+              .flatMap((row) => row.getAnimations())
+              .filter((animation) => animation.playState === "running"),
+          ).toHaveLength(0);
+        });
         const sourceRect = source.getBoundingClientRect();
         source.dispatchEvent(
           new PointerEvent("pointerdown", {
@@ -326,15 +339,42 @@ it.each(["selection", "drag"])(
         await expect
           .element(screen.getByRole("status").filter({ hasText: "Move here" }))
           .toBeVisible();
-        const updated = target.getBoundingClientRect();
+        const gap = screen.container.querySelector<HTMLElement>("[data-sidebar-drop-space]");
+        expect(gap).not.toBeNull();
+        const following = gap!.nextElementSibling as HTMLElement;
+        await vi.waitFor(() => {
+          const list = gap!.parentElement!;
+          expect(
+            following.getBoundingClientRect().top -
+              list.getBoundingClientRect().top -
+              following.offsetTop,
+          ).toBeGreaterThan(30);
+        });
+        const hint = screen.container.querySelector("[data-sidebar-drag-hint]")!;
+        expect(hint.closest("ul")).toBeNull();
+        const space = gap!.getBoundingClientRect();
         document.dispatchEvent(
-          new PointerEvent("pointerup", {
+          new PointerEvent("pointermove", {
             ...pointer,
-            buttons: 0,
-            clientX: updated.left + 40,
-            clientY: after ? updated.bottom - 2 : updated.top + 2,
+            clientX: space.left + 40,
+            clientY: space.top + space.height / 2,
           }),
         );
+        await expect
+          .element(screen.getByRole("status").filter({ hasText: "Move here" }))
+          .toBeVisible();
+        if (cancel)
+          document.dispatchEvent(new KeyboardEvent("keydown", { code: "Escape", bubbles: true }));
+        else {
+          document.dispatchEvent(
+            new PointerEvent("pointerup", {
+              ...pointer,
+              buttons: 0,
+              clientX: space.left + 40,
+              clientY: space.top + space.height / 2,
+            }),
+          );
+        }
         await vi.waitFor(() =>
           expect(screen.container.querySelector("[data-sidebar-drag-hint]")).toBeNull(),
         );
@@ -354,6 +394,9 @@ it.each(["selection", "drag"])(
       await vi.waitFor(() =>
         expect(taskOrder()).toEqual([flatOrder[1], flatOrder[0], flatOrder[2]]),
       );
+      await reorder(third.element(), group.element(), false, true);
+      expect(taskOrder()).toEqual([flatOrder[1], flatOrder[0], flatOrder[2]]);
+      expect(screen.container.querySelector("[data-sidebar-drop-space]")).toBeNull();
       expect(JSON.parse(localStorage.getItem(SIDEBAR_ITEM_ORDER_KEY)!).working).toHaveLength(4);
     }
     const persisted = JSON.parse(localStorage.getItem(SIDEBAR_THREAD_GROUPS_KEY)!);
