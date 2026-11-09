@@ -1349,6 +1349,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     id: string;
     label: string;
   } | null>(null);
+  const [reorderPreview, setReorderPreview] = useState<typeof manualDrop>(null);
   const createManualGroup = (keys: readonly string[]) => {
     const members = keys.filter((key) =>
       searchableThreads.some((thread) => threadShellKey(thread) === key),
@@ -1743,6 +1744,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const manualLayout =
     isContextDrag ||
     manualDrop !== null ||
+    reorderPreview !== null ||
     threadGroups.length > 0 ||
     Object.keys(itemOrder).length > 0;
   const dragTargetSection = isContextDrag ? null : (dragState?.targetSection ?? null);
@@ -1750,6 +1752,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     dragSensorRef.current = null;
     contextDragKeyRef.current = null;
     setManualDrop(null);
+    setReorderPreview(null);
     dragScrollRef.current = null;
     endThreadContextDrag();
     if (started) {
@@ -1818,12 +1821,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         return { kind: "ungroup", id: "ungroup", label: "Remove from group" };
       // Retain the destination when the pointer rests on the row now occupying it.
       if (
-        manualDrop?.kind === "reorder" &&
+        reorderPreview?.kind === "reorder" &&
         [...list.querySelectorAll<HTMLElement>("[data-sidebar-row]")].some(
           (row) => row.dataset.sidebarRow === source && containsPoint(row, 8),
         )
       )
-        return manualDrop;
+        return reorderPreview;
       const sourceSection = sourceGroup?.section ?? sectionByThreadKey.get(source);
       const selected = useThreadSelectionStore.getState().selectedThreadKeys;
       const moving = selected.has(source) ? selected : new Set([source]);
@@ -1935,6 +1938,15 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   };
   const moveThreadContextDrag = (point: { x: number; y: number }) => {
     const target = manualDropAt(point);
+    if (target?.kind === "reorder")
+      setReorderPreview((current) =>
+        current?.id === target.id &&
+        current?.after === target.after &&
+        current?.section === target.section &&
+        current?.groupId === target.groupId
+          ? current
+          : target,
+      );
     setManualDrop((current) =>
       current?.kind === target?.kind &&
       current?.id === target?.id &&
@@ -2181,8 +2193,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     sidebarListItemsKey,
     visibleDraftSessionCount,
     routeDraftIdForRows ?? "",
-    manualDrop?.kind === "reorder"
-      ? `${manualDrop.section}:${manualDrop.id}:${manualDrop.after}`
+    reorderPreview?.kind === "reorder"
+      ? `${reorderPreview.section}:${reorderPreview.id}:${reorderPreview.after}`
       : "",
     dragState !== null && manualLayout ? "manual-drag" : "",
   ].join("\0");
@@ -3746,7 +3758,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                           <SortableThreadRow
                             key={threadKey}
                             sortableId={threadKey}
-                            contextDrag={isContextDrag || manualDrop !== null}
+                            contextDrag={
+                              isContextDrag || manualDrop !== null || reorderPreview !== null
+                            }
                             sortableDisabled={
                               renamingThreadKey === threadKey || optimisticDrop !== null
                             }
@@ -4013,7 +4027,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                             break;
                         }
                       }
-                      if (manualDrop?.kind === "reorder" && dragState) {
+                      if (reorderPreview?.kind === "reorder" && dragState) {
                         const sourceGroup = groupDragSource(dragState.activeKey);
                         const selected = useThreadSelectionStore.getState().selectedThreadKeys;
                         const movingKeys = new Set(
@@ -4021,12 +4035,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                             ? [
                                 dragState.activeKey,
                                 ...sourceGroup.group.threadKeys.filter(
-                                  (key) => sectionByThreadKey.get(key) === manualDrop.section,
+                                  (key) => sectionByThreadKey.get(key) === reorderPreview.section,
                                 ),
                               ]
                             : selected.has(dragState.activeKey)
                               ? [...selected].filter(
-                                  (key) => sectionByThreadKey.get(key) === manualDrop.section,
+                                  (key) => sectionByThreadKey.get(key) === reorderPreview.section,
                                 )
                               : [dragState.activeKey],
                         );
@@ -4034,27 +4048,28 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                           isValidElement(node) ? String(node.key) : "";
                         const moving = items.filter((node) => movingKeys.has(keyOf(node)));
                         const remaining = items.filter((node) => !movingKeys.has(keyOf(node)));
-                        const targetGroup = manualDrop.id.startsWith("group:")
-                          ? threadGroups.find((group) => `group:${group.id}` === manualDrop.id)
+                        const targetGroup = reorderPreview.id.startsWith("group:")
+                          ? threadGroups.find((group) => `group:${group.id}` === reorderPreview.id)
                           : undefined;
                         const targetKeys = new Set(
                           targetGroup
                             ? [
-                                `group:${manualDrop.section}:${targetGroup.id}`,
-                                ...(manualDrop.after
+                                `group:${reorderPreview.section}:${targetGroup.id}`,
+                                ...(reorderPreview.after
                                   ? targetGroup.threadKeys.filter(
-                                      (key) => sectionByThreadKey.get(key) === manualDrop.section,
+                                      (key) =>
+                                        sectionByThreadKey.get(key) === reorderPreview.section,
                                     )
                                   : []),
                               ]
-                            : [manualDrop.id],
+                            : [reorderPreview.id],
                         );
                         const matches = remaining.flatMap((node, index) =>
                           targetKeys.has(keyOf(node)) ? [index] : [],
                         );
-                        const index = manualDrop.after ? matches.at(-1) : matches[0];
+                        const index = reorderPreview.after ? matches.at(-1) : matches[0];
                         if (index !== undefined) {
-                          remaining.splice(index + (manualDrop.after ? 1 : 0), 0, ...moving);
+                          remaining.splice(index + (reorderPreview.after ? 1 : 0), 0, ...moving);
                           return remaining;
                         }
                       }

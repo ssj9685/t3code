@@ -386,6 +386,22 @@ it.each([
         expect(
           Boolean(sourceRow.compareDocumentPosition(targetRow) & Node.DOCUMENT_POSITION_FOLLOWING),
         ).toBe(!after);
+        const previewOrder = taskOrder();
+        const hint = screen.container
+          .querySelector("[data-sidebar-drag-hint]")!
+          .getBoundingClientRect();
+        document.dispatchEvent(
+          new PointerEvent("pointermove", {
+            ...pointer,
+            clientX: hint.left + 40,
+            clientY: hint.top + hint.height / 2,
+          }),
+        );
+        await expect
+          .element(screen.getByRole("status").filter({ hasText: /Remove from group|Drag folder/ }))
+          .toBeVisible();
+        await settleMotion();
+        expect(taskOrder()).toEqual(previewOrder);
         const space = source.getBoundingClientRect();
         if (cancel)
           document.dispatchEvent(new KeyboardEvent("keydown", { code: "Escape", bubbles: true }));
