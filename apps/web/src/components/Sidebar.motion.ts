@@ -130,12 +130,7 @@ export function createSidebarListMotion(parent: HTMLUListElement) {
       if (disposed) return;
       const next = new Map(
         Array.from(parent.children)
-          .filter(
-            (node): node is HTMLElement =>
-              node instanceof HTMLElement &&
-              !exiting.has(node) &&
-              !node.hasAttribute("data-sidebar-drop-space"),
-          )
+          .filter((node): node is HTMLElement => node instanceof HTMLElement && !exiting.has(node))
           .map((node) => [
             node,
             {
@@ -245,12 +240,7 @@ export function createSidebarListMotion(parent: HTMLUListElement) {
       const origin = parent.getBoundingClientRect().top;
       const snapshot = new Map(
         Array.from(parent.children)
-          .filter(
-            (node): node is HTMLElement =>
-              node instanceof HTMLElement &&
-              !exiting.has(node) &&
-              !node.hasAttribute("data-sidebar-drop-space"),
-          )
+          .filter((node): node is HTMLElement => node instanceof HTMLElement && !exiting.has(node))
           .map((node) => [node, node.getBoundingClientRect().top - origin]),
       );
       suspend();

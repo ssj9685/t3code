@@ -78,6 +78,7 @@ import {
   useSyncExternalStore,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
+  isValidElement,
   type ReactNode,
 } from "react";
 import { type AnyRouter, useRouter } from "@tanstack/react-router";
@@ -1815,10 +1816,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       };
       if (!sourceGroup && containsPoint(dragHintRef.current))
         return { kind: "ungroup", id: "ungroup", label: "Remove from group" };
-      // Keep the opened space a stable target while surrounding rows animate away.
+      // Retain the destination when the pointer rests on the row now occupying it.
       if (
         manualDrop?.kind === "reorder" &&
-        containsPoint(list.querySelector("[data-sidebar-drop-space]"), 8)
+        [...list.querySelectorAll<HTMLElement>("[data-sidebar-row]")].some(
+          (row) => row.dataset.sidebarRow === source && containsPoint(row, 8),
+        )
       )
         return manualDrop;
       const sourceSection = sourceGroup?.section ?? sectionByThreadKey.get(source);
@@ -3853,27 +3856,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                           onDraftContextMenu={handleDraftContextMenu}
                         />,
                       ];
-                      const addDropSpace = (
-                        id: string,
-                        section: SidebarSection,
-                        after: boolean,
-                      ) => {
-                        if (
-                          manualDrop?.kind !== "reorder" ||
-                          manualDrop.id !== id ||
-                          manualDrop.section !== section ||
-                          manualDrop.after !== after
-                        )
-                          return;
-                        items.push(
-                          <li
-                            key="manual-drop-space"
-                            data-sidebar-drop-space
-                            aria-hidden
-                            className="pointer-events-none h-10 shrink-0 list-none rounded-md border border-dashed border-ring/40 bg-sidebar-row-hover"
-                          />,
-                        );
-                      };
                       const renderedGroupSections = new Set<SidebarSection>();
                       for (const item of sidebarListItems) {
                         if (item.kind === "thread") {
@@ -3883,7 +3865,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                             const rowId = bucket.rowId;
                             if (bucket.group && rowId) {
                               const group = bucket.group;
-                              addDropSpace(`group:${group.id}`, item.section, false);
+
                               items.push(
                                 <SidebarThreadGroupHeader
                                   key={rowId}
@@ -3914,12 +3896,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               );
                             }
                             for (const thread of bucket.visibleThreads) {
-                              addDropSpace(threadShellKey(thread), item.section, false);
                               items.push(renderThreadRow(thread, item.section, rowId));
-                              addDropSpace(threadShellKey(thread), item.section, true);
                             }
-                            if (bucket.group)
-                              addDropSpace(`group:${bucket.group.id}`, item.section, true);
                           }
                           continue;
                         }
@@ -4033,6 +4011,51 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               />,
                             );
                             break;
+                        }
+                      }
+                      if (manualDrop?.kind === "reorder" && dragState) {
+                        const sourceGroup = groupDragSource(dragState.activeKey);
+                        const selected = useThreadSelectionStore.getState().selectedThreadKeys;
+                        const movingKeys = new Set(
+                          sourceGroup
+                            ? [
+                                dragState.activeKey,
+                                ...sourceGroup.group.threadKeys.filter(
+                                  (key) => sectionByThreadKey.get(key) === manualDrop.section,
+                                ),
+                              ]
+                            : selected.has(dragState.activeKey)
+                              ? [...selected].filter(
+                                  (key) => sectionByThreadKey.get(key) === manualDrop.section,
+                                )
+                              : [dragState.activeKey],
+                        );
+                        const keyOf = (node: ReactNode) =>
+                          isValidElement(node) ? String(node.key) : "";
+                        const moving = items.filter((node) => movingKeys.has(keyOf(node)));
+                        const remaining = items.filter((node) => !movingKeys.has(keyOf(node)));
+                        const targetGroup = manualDrop.id.startsWith("group:")
+                          ? threadGroups.find((group) => `group:${group.id}` === manualDrop.id)
+                          : undefined;
+                        const targetKeys = new Set(
+                          targetGroup
+                            ? [
+                                `group:${manualDrop.section}:${targetGroup.id}`,
+                                ...(manualDrop.after
+                                  ? targetGroup.threadKeys.filter(
+                                      (key) => sectionByThreadKey.get(key) === manualDrop.section,
+                                    )
+                                  : []),
+                              ]
+                            : [manualDrop.id],
+                        );
+                        const matches = remaining.flatMap((node, index) =>
+                          targetKeys.has(keyOf(node)) ? [index] : [],
+                        );
+                        const index = manualDrop.after ? matches.at(-1) : matches[0];
+                        if (index !== undefined) {
+                          remaining.splice(index + (manualDrop.after ? 1 : 0), 0, ...moving);
+                          return remaining;
                         }
                       }
                       return items;

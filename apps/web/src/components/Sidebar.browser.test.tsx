@@ -379,50 +379,14 @@ it.each([
         await expect
           .element(screen.getByRole("status").filter({ hasText: "Move here" }))
           .toBeVisible();
-        const gap = screen.container.querySelector<HTMLElement>("[data-sidebar-drop-space]");
-        expect(gap).not.toBeNull();
-        await vi.waitFor(() => {
-          const following = gap!.nextElementSibling!;
-          expect(following.getBoundingClientRect().top).toBeGreaterThanOrEqual(
-            gap!.getBoundingClientRect().bottom - 1,
-          );
-        });
-        if (section === "Active") {
-          await vi.waitFor(() => {
-            const boundary = screen.container.querySelector(
-              '[data-testid="sidebar-pinned-divider"]',
-            )!;
-            const label = boundary.firstElementChild!.getBoundingClientRect();
-            const firstRow = screen.container
-              .querySelector("[data-sidebar-row]")!
-              .getBoundingClientRect();
-            expect(firstRow.top).toBeGreaterThanOrEqual(label.bottom);
-          });
-        }
-        const hint = screen.container.querySelector("[data-sidebar-drag-hint]")!;
-        expect(hint.closest("ul")).toBeNull();
-        const space = gap!.getBoundingClientRect();
-        document.dispatchEvent(
-          new PointerEvent("pointermove", {
-            ...pointer,
-            clientX: space.left + 40,
-            clientY: space.bottom + 6,
-          }),
-        );
-        await expect
-          .element(screen.getByRole("status").filter({ hasText: "Move here" }))
-          .toBeVisible();
-        expect(screen.container.querySelector("[data-sidebar-drop-space]")).toBe(gap);
-        document.dispatchEvent(
-          new PointerEvent("pointermove", {
-            ...pointer,
-            clientX: space.left + 40,
-            clientY: space.top + space.height / 2,
-          }),
-        );
-        await expect
-          .element(screen.getByRole("status").filter({ hasText: "Move here" }))
-          .toBeVisible();
+        expect(screen.container.querySelector("[data-sidebar-drop-space]")).toBeNull();
+        await settleMotion();
+        const sourceRow = source.closest("li")!;
+        const targetRow = target.closest("li")!;
+        expect(
+          Boolean(sourceRow.compareDocumentPosition(targetRow) & Node.DOCUMENT_POSITION_FOLLOWING),
+        ).toBe(!after);
+        const space = source.getBoundingClientRect();
         if (cancel)
           document.dispatchEvent(new KeyboardEvent("keydown", { code: "Escape", bubbles: true }));
         else {
