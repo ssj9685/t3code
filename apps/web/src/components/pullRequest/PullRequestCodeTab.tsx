@@ -16,6 +16,9 @@ import type {
   PullRequestThreadCommentsResult,
 } from "@t3tools/contracts";
 import {
+  CheckIcon,
+  FilesIcon,
+  GitCommitHorizontalIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   Columns2Icon,
@@ -25,7 +28,6 @@ import {
   MessageSquareOffIcon,
   PilcrowIcon,
   Rows3Icon,
-  Settings2Icon,
   TextWrapIcon,
   TriangleAlertIcon,
 } from "lucide-react";
@@ -81,6 +83,7 @@ import { pullRequestEnvironment } from "~/state/pullRequests";
 import { useEnvironmentQuery } from "~/state/query";
 import { useAtomCommand } from "~/state/use-atom-command";
 
+import { DiffOptionsMenu } from "../diffs/DiffOptionsMenu";
 import { DiffPanelLoadingState } from "../DiffPanelShell";
 import { useDiffWorkerPool } from "../DiffWorkerPoolProvider";
 import { DiffCommentAnnotation } from "../diffs/DiffCommentAnnotation";
@@ -96,12 +99,10 @@ import { Checkbox } from "../ui/checkbox";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../ui/menu";
 import { toastManager } from "../ui/toast";
@@ -1094,18 +1095,29 @@ function PullRequestCodeTab({
     setSelectedLines(null);
   };
   const toolbar = (
-    <div className="@container flex h-10 min-h-10 shrink-0 items-center justify-between gap-2 border-b border-border/60 bg-background px-4 text-xs text-muted-foreground">
-      <div className="flex min-w-0 flex-1 items-center gap-3">
+    <div className="@container/diff-toolbar flex min-h-10 shrink-0 flex-wrap items-center justify-between gap-x-2 gap-y-1 py-1 border-b border-border/60 bg-background px-4 text-xs text-muted-foreground">
+      <div className="flex min-w-0 flex-1 basis-52 flex-wrap items-center gap-2">
         {orderedCommits.length > 0 ? (
           <DropdownMenu>
-            <DropdownMenuTrigger
-              render={<Button size="xs" variant="secondary" />}
-              className="min-w-0 max-w-64"
-              aria-label={`Diff scope: ${scopeLabel}`}
-            >
-              <span className="truncate">{scopeLabel}</span>
-              <ChevronDownIcon className="size-3.5 shrink-0 opacity-70" />
-            </DropdownMenuTrigger>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <DropdownMenuTrigger
+                    render={<Button size="xs" variant="secondary" />}
+                    className="min-w-0 max-w-64"
+                    aria-label={`Diff scope: ${scopeLabel}`}
+                  >
+                    <GitCommitHorizontalIcon aria-hidden className="size-3.5 shrink-0" />
+                    <span className="truncate @max-[36rem]/diff-toolbar:hidden">{scopeLabel}</span>
+                    <span className="hidden @max-[36rem]/diff-toolbar:inline">
+                      {selectedCommit ? selectedCommit.oid.slice(0, 7) : "All"}
+                    </span>
+                    <ChevronDownIcon className="size-3.5 shrink-0 opacity-70" />
+                  </DropdownMenuTrigger>
+                }
+              />
+              <TooltipPopup side="top">{scopeLabel}</TooltipPopup>
+            </Tooltip>
             <DropdownMenuContent align="start" className="max-w-[min(28rem,calc(100vw-2rem))]">
               <DropdownMenuRadioGroup
                 value={commit ?? "all"}
@@ -1143,22 +1155,49 @@ function PullRequestCodeTab({
             </DropdownMenuContent>
           </DropdownMenu>
         ) : null}
-        <PullRequestMetaLine>
-          <span className="shrink-0 tabular-nums">
-            {files.length} {files.length === 1 ? "file" : "files"}
+        <PullRequestMetaLine className="flex-wrap">
+          <span
+            className="inline-flex shrink-0 items-center gap-1 tabular-nums"
+            role="group"
+            aria-label={`${files.length}${nextCursor === null ? "" : "+"} ${files.length === 1 ? "file" : "files"}`}
+          >
+            <FilesIcon aria-hidden className="hidden size-3.5 @max-[36rem]/diff-toolbar:block" />
+            {files.length}
             {nextCursor === null ? "" : "+"}
+            <span className="@max-[36rem]/diff-toolbar:hidden">
+              {files.length === 1 ? "file" : "files"}
+            </span>
           </span>
           {hiddenTestFileCount > 0 ? (
-            <Button type="button" size="xs" variant="link" onClick={() => setHideTestFiles(false)}>
-              {hiddenTestFileCount} test {hiddenTestFileCount === 1 ? "file" : "files"} hidden
+            <Button
+              type="button"
+              size="xs"
+              variant="link"
+              aria-label={`Show ${hiddenTestFileCount} hidden test ${hiddenTestFileCount === 1 ? "file" : "files"}`}
+              onClick={() => setHideTestFiles(false)}
+            >
+              <FlaskConicalOffIcon aria-hidden className="size-3.5 shrink-0" />
+              {hiddenTestFileCount}{" "}
+              <span className="@max-[36rem]/diff-toolbar:hidden">
+                test {hiddenTestFileCount === 1 ? "file" : "files"}
+              </span>{" "}
+              hidden
             </Button>
           ) : null}
           {filesViewed.enabled && files.length > 0 ? (
-            <span className="flex min-w-0 items-center gap-1 tabular-nums">
+            <span
+              className="flex min-w-0 items-center gap-1 tabular-nums"
+              role="group"
+              aria-label={`${filePaths.filter(isFileViewed).length} of ${files.length} files viewed${viewedFilesStore === "environment" ? ` in ${APP_BASE_NAME}` : ""}`}
+            >
+              <CheckIcon
+                aria-hidden
+                className="hidden size-3.5 shrink-0 @max-[36rem]/diff-toolbar:block"
+              />
               <span className="shrink-0">
                 {filePaths.filter(isFileViewed).length} / {files.length}
               </span>
-              <span className="truncate">
+              <span className="truncate @max-[36rem]/diff-toolbar:hidden">
                 {viewedFilesStore === "environment" ? `viewed in ${APP_BASE_NAME}` : "viewed"}
               </span>
               {viewedFilesStore === "environment" ? (
@@ -1234,74 +1273,30 @@ function PullRequestCodeTab({
           ) : null}
         </PullRequestMetaLine>
       </div>
-      <div className="flex shrink-0 items-center gap-1">
-        <DropdownMenu>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <DropdownMenuTrigger
-                  render={<Button size="icon-sm" variant="ghost" />}
-                  className="@lg:hidden"
-                  aria-label="Diff options"
-                />
-              }
-            >
-              <Settings2Icon className="size-3.5" />
-            </TooltipTrigger>
-            <TooltipPopup side="top">Diff options</TooltipPopup>
-          </Tooltip>
-          <DropdownMenuContent align="end">
-            <DropdownMenuCheckboxItem
-              checked={ignoreWhitespace}
-              onCheckedChange={(checked) => changeIgnoreWhitespace(checked)}
-            >
-              Hide whitespace changes
-            </DropdownMenuCheckboxItem>
-            <DropdownMenuCheckboxItem
-              checked={wordWrap}
-              onCheckedChange={(checked) => setWordWrap(checked)}
-            >
-              Wrap lines
-            </DropdownMenuCheckboxItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuRadioGroup
-              value={diffLayout}
-              onValueChange={(value) => {
-                if (value === "stacked" || value === "split") {
-                  updateClientSettings({ diffLayout: value });
+      <div className="ml-auto flex max-w-full flex-wrap items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1">
+          <div className="hidden @min-[24rem]/diff-toolbar:block">
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Toggle
+                    aria-label={
+                      ignoreWhitespace ? "Show whitespace changes" : "Hide whitespace changes"
+                    }
+                    variant="ghost"
+                    size="sm"
+                    pressed={ignoreWhitespace}
+                    onPressedChange={(pressed) => changeIgnoreWhitespace(Boolean(pressed))}
+                  />
                 }
-              }}
-            >
-              <DropdownMenuRadioItem value="stacked" closeOnClick>
-                Stacked
-              </DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="split" closeOnClick>
-                Split
-              </DropdownMenuRadioItem>
-            </DropdownMenuRadioGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <div className="hidden items-center gap-1 @lg:flex">
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Toggle
-                  aria-label={
-                    ignoreWhitespace ? "Show whitespace changes" : "Hide whitespace changes"
-                  }
-                  variant="ghost"
-                  size="sm"
-                  pressed={ignoreWhitespace}
-                  onPressedChange={(pressed) => changeIgnoreWhitespace(Boolean(pressed))}
-                />
-              }
-            >
-              <PilcrowIcon className="size-3.5" />
-            </TooltipTrigger>
-            <TooltipPopup side="top">
-              {ignoreWhitespace ? "Show whitespace changes" : "Hide whitespace changes"}
-            </TooltipPopup>
-          </Tooltip>
+              >
+                <PilcrowIcon className="size-3.5" />
+              </TooltipTrigger>
+              <TooltipPopup side="top">
+                {ignoreWhitespace ? "Show whitespace changes" : "Hide whitespace changes"}
+              </TooltipPopup>
+            </Tooltip>
+          </div>
           <ToggleGroup
             aria-label="Diff layout"
             className="shrink-0"
@@ -1341,70 +1336,94 @@ function PullRequestCodeTab({
               {wordWrap ? "Disable line wrapping" : "Enable line wrapping"}
             </TooltipPopup>
           </Tooltip>
+          {fileKeys.length > 0 ? (
+            <div className="hidden @min-[24rem]/diff-toolbar:block">
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      type="button"
+                      size="icon-sm"
+                      variant="ghost"
+                      aria-label={allFilesCollapsed ? "Expand all files" : "Collapse all files"}
+                      onClick={toggleAllFiles}
+                    />
+                  }
+                >
+                  <MorphIcon
+                    className="size-3.5"
+                    icon={allFilesCollapsed ? ChevronsUpDown : ChevronsDownUp}
+                  />
+                </TooltipTrigger>
+                <TooltipPopup side="top">
+                  {allFilesCollapsed ? "Expand all files" : "Collapse all files"}
+                </TooltipPopup>
+              </Tooltip>
+            </div>
+          ) : null}
+          {testFileCount > 0 ? (
+            <div className="hidden @min-[24rem]/diff-toolbar:block">
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Toggle
+                      aria-label="Hide test files"
+                      variant="ghost"
+                      size="sm"
+                      pressed={hideTestFiles}
+                      onPressedChange={(pressed) => setHideTestFiles(Boolean(pressed))}
+                    />
+                  }
+                >
+                  <FlaskConicalOffIcon className="size-3.5" />
+                </TooltipTrigger>
+                <TooltipPopup side="top">
+                  {hideTestFiles ? "Show test files" : "Hide test files"}
+                </TooltipPopup>
+              </Tooltip>
+            </div>
+          ) : null}
+          {fileKeys.length > 0 ? (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Toggle
+                    aria-label={fileTreeOpen ? "Hide file tree" : "Show file tree"}
+                    variant="ghost"
+                    size="sm"
+                    pressed={fileTreeOpen}
+                    onPressedChange={(pressed) => setFileTreeOpen(Boolean(pressed))}
+                  />
+                }
+              >
+                <FolderTreeIcon className="size-3.5" />
+              </TooltipTrigger>
+              <TooltipPopup side="top">
+                {fileTreeOpen ? "Hide file tree" : "Show file tree"}
+              </TooltipPopup>
+            </Tooltip>
+          ) : null}
         </div>
-        {fileKeys.length > 0 ? (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  type="button"
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label={allFilesCollapsed ? "Expand all files" : "Collapse all files"}
-                  onClick={toggleAllFiles}
-                />
-              }
-            >
-              <MorphIcon
-                className="size-3.5"
-                icon={allFilesCollapsed ? ChevronsUpDown : ChevronsDownUp}
-              />
-            </TooltipTrigger>
-            <TooltipPopup side="top">
-              {allFilesCollapsed ? "Expand all files" : "Collapse all files"}
-            </TooltipPopup>
-          </Tooltip>
-        ) : null}
-        {testFileCount > 0 ? (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Toggle
-                  aria-label="Hide test files"
-                  variant="ghost"
-                  size="sm"
-                  pressed={hideTestFiles}
-                  onPressedChange={(pressed) => setHideTestFiles(Boolean(pressed))}
-                />
-              }
-            >
-              <FlaskConicalOffIcon className="size-3.5" />
-            </TooltipTrigger>
-            <TooltipPopup side="top">
-              {hideTestFiles ? "Show test files" : "Hide test files"}
-            </TooltipPopup>
-          </Tooltip>
-        ) : null}
-        {fileKeys.length > 0 ? (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Toggle
-                  aria-label={fileTreeOpen ? "Hide file tree" : "Show file tree"}
-                  variant="ghost"
-                  size="sm"
-                  pressed={fileTreeOpen}
-                  onPressedChange={(pressed) => setFileTreeOpen(Boolean(pressed))}
-                />
-              }
-            >
-              <FolderTreeIcon className="size-3.5" />
-            </TooltipTrigger>
-            <TooltipPopup side="top">
-              {fileTreeOpen ? "Hide file tree" : "Show file tree"}
-            </TooltipPopup>
-          </Tooltip>
-        ) : null}
+        <DiffOptionsMenu
+          ignoreWhitespace={ignoreWhitespace}
+          onIgnoreWhitespaceChange={changeIgnoreWhitespace}
+          files={
+            fileKeys.length > 0
+              ? {
+                  collapsed: allFilesCollapsed,
+                  onToggleCollapsed: toggleAllFiles,
+                }
+              : null
+          }
+          testFiles={
+            testFileCount > 0
+              ? {
+                  hidden: hideTestFiles,
+                  onHiddenChange: setHideTestFiles,
+                }
+              : null
+          }
+        />
       </div>
     </div>
   );
@@ -1584,7 +1603,7 @@ function PullRequestCodeTab({
             resizeLabel="Resize PR Code files"
           >
             <DiffFileTree
-              ariaLabel={`${capitalizeTerm(term)} #${detail.number} files`}
+              ariaLabel={`${capitalizeTerm(term)} #${detail.number} ${files.length === 1 ? "file" : "files"}`}
               entries={fileTreeEntries}
               onSelectFile={revealFile}
               footer={

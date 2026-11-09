@@ -152,14 +152,14 @@ it("keeps the diff after a refresh that brings back the same page", async () => 
   const container = document.createElement("div");
   container.className = "flex h-[700px] w-[900px]";
   await using screen = await render(tab(0), { container });
-  await expect.element(screen.getByText("1 file", { exact: true })).toBeVisible();
+  await expect.element(screen.getByLabelText("1 file", { exact: true })).toBeVisible();
 
   await screen.rerender(tab(1));
 
   await expect
     .element(screen.getByText("This pull request has no file changes."))
     .not.toBeInTheDocument();
-  await expect.element(screen.getByText("1 file", { exact: true })).toBeVisible();
+  await expect.element(screen.getByLabelText("1 file", { exact: true })).toBeVisible();
 });
 
 function pagedContainer() {
@@ -229,7 +229,7 @@ it("never requests the diff of a selected commit the pull request no longer has"
     { container },
   );
 
-  await expect.element(screen.getByText("1 file", { exact: true })).toBeVisible();
+  await expect.element(screen.getByLabelText("1 file", { exact: true })).toBeVisible();
   await expect
     .element(screen.getByRole("button", { name: "Diff scope: All commits" }))
     .toBeVisible();

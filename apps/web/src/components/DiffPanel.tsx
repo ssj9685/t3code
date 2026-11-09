@@ -1,3 +1,4 @@
+import { DiffOptionsMenu } from "./diffs/DiffOptionsMenu";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
 import { useAtomValue } from "@effect/atom-react";
 import type { FileDiffContentsLoader, FileDiffMetadata } from "@pierre/diffs";
@@ -816,11 +817,11 @@ export default function DiffPanel({
 
   const headerRow = (
     <>
-      <div className="@container/diff-refs flex min-w-0 flex-1 items-center gap-3 [-webkit-app-region:no-drag]">
+      <div className="@container/diff-refs flex min-w-0 flex-1 basis-52 items-center gap-2 [-webkit-app-region:no-drag]">
         <DropdownMenu>
           <DropdownMenuTrigger
             render={<Button size="xs" variant="secondary" />}
-            className={cn("max-w-full", headerCommitSha !== null && "min-w-0 shrink")}
+            className="min-w-0 max-w-full shrink"
             aria-label={`Diff scope: ${selectedScopeLabel}`}
             data-workspace-focus-default
           >
@@ -984,7 +985,7 @@ export default function DiffPanel({
         </DropdownMenu>
         {canSelectBranchBase && (
           <div
-            className="flex min-w-0 max-w-full items-center gap-2 overflow-hidden text-xs text-muted-foreground"
+            className="flex min-w-0 max-w-full flex-1 items-center gap-2 overflow-hidden text-xs text-muted-foreground"
             aria-label={`Comparing ${comparisonHeadRef} against ${comparisonBaseRef}`}
           >
             <Tooltip>
@@ -1024,14 +1025,24 @@ export default function DiffPanel({
                 selectBranchBaseRef(value === AUTOMATIC_BASE_REF ? null : value);
               }}
             >
-              <ComboboxTrigger
-                render={<Button variant="ghost-muted" size="xs" />}
-                className="min-w-9 max-w-48 shrink-0"
-                aria-label={`Change comparison target. Currently ${comparisonBaseRef}`}
-              >
-                <span className="min-w-0 truncate">{comparisonBaseRef}</span>
-                <ChevronDownIcon className="size-3.5 shrink-0 opacity-70" />
-              </ComboboxTrigger>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <ComboboxTrigger
+                      render={<Button variant="ghost-muted" size="xs" />}
+                      className="min-w-16 max-w-48 shrink"
+                      aria-label={`Change comparison target. Currently ${comparisonBaseRef}`}
+                    >
+                      <span className="flex min-w-0">
+                        <span className="truncate">{comparisonBaseRef.slice(0, -5)}</span>
+                        <span className="shrink-0">{comparisonBaseRef.slice(-5)}</span>
+                      </span>
+                      <ChevronDownIcon className="size-3.5 shrink-0 opacity-70" />
+                    </ComboboxTrigger>
+                  }
+                />
+                <TooltipPopup side="top">{`${comparisonHeadRef} → ${comparisonBaseRef}`}</TooltipPopup>
+              </Tooltip>
               <ComboboxPopup
                 align="start"
                 className="w-72 min-w-0 max-w-[calc(100vw-1rem)] overflow-hidden"
@@ -1111,13 +1122,6 @@ export default function DiffPanel({
             </Combobox>
           </div>
         )}
-      </div>
-      <div
-        className={cn(
-          "flex shrink-0 items-center gap-1 [-webkit-app-region:no-drag]",
-          headerCommitSha !== null && "gap-0",
-        )}
-      >
         {codeViewFiles.length > 0 || (isGitSelection && selectedGitSource?.files?.length) ? (
           <DiffStatLabel
             additions={diffLineStat.additions}
@@ -1126,6 +1130,13 @@ export default function DiffPanel({
             layout="inline"
           />
         ) : null}
+      </div>
+      <div
+        className={cn(
+          "ml-auto flex max-w-full flex-wrap items-center gap-1 [-webkit-app-region:no-drag]",
+          headerCommitSha !== null && "gap-0",
+        )}
+      >
         {canRefreshGitDiff && (
           <Tooltip>
             <TooltipTrigger
@@ -1146,132 +1157,161 @@ export default function DiffPanel({
             </TooltipPopup>
           </Tooltip>
         )}
-        {diffFileKeys.length > 0 && (
+
+        <div className="flex flex-wrap items-center gap-1">
+          {diffFileKeys.length > 0 && (
+            <div className="hidden @min-[24rem]/diff-toolbar:block">
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      type="button"
+                      size="icon-sm"
+                      variant="ghost"
+                      aria-label={allDiffFilesCollapsed ? "Expand all files" : "Collapse all files"}
+                      onClick={toggleDiffFileCollapse}
+                    />
+                  }
+                >
+                  <MorphIcon
+                    className="size-3.5"
+                    icon={allDiffFilesCollapsed ? ChevronsUpDown : ChevronsDownUp}
+                  />
+                </TooltipTrigger>
+                <TooltipPopup side="top">
+                  {allDiffFilesCollapsed ? "Expand all files" : "Collapse all files"}
+                </TooltipPopup>
+              </Tooltip>
+            </div>
+          )}
+          <ToggleGroup
+            aria-label="Diff layout"
+            className="shrink-0"
+            variant="segmented"
+            value={[diffLayout]}
+            onValueChange={(value) => {
+              const next = value[0];
+              if (next === "stacked" || next === "split") {
+                updateClientSettings({ diffLayout: next });
+              }
+            }}
+          >
+            <Toggle aria-label="Stacked diff view" value="stacked">
+              <Rows3Icon className="size-3.5" />
+            </Toggle>
+            <Toggle aria-label="Split diff view" value="split">
+              <Columns2Icon className="size-3.5" />
+            </Toggle>
+          </ToggleGroup>
           <Tooltip>
             <TooltipTrigger
               render={
-                <Button
-                  type="button"
-                  size="icon-sm"
+                <Toggle
+                  aria-label={wordWrap ? "Disable diff line wrapping" : "Enable diff line wrapping"}
                   variant="ghost"
-                  aria-label={allDiffFilesCollapsed ? "Expand all files" : "Collapse all files"}
-                  onClick={toggleDiffFileCollapse}
+                  size="sm"
+                  pressed={wordWrap}
+                  onPressedChange={(pressed) => {
+                    setWordWrap(Boolean(pressed));
+                  }}
                 />
               }
             >
-              <MorphIcon
-                className="size-3.5"
-                icon={allDiffFilesCollapsed ? ChevronsUpDown : ChevronsDownUp}
-              />
+              <TextWrapIcon className="size-3.5" />
             </TooltipTrigger>
             <TooltipPopup side="top">
-              {allDiffFilesCollapsed ? "Expand all files" : "Collapse all files"}
+              {wordWrap ? "Disable line wrapping" : "Enable line wrapping"}
             </TooltipPopup>
           </Tooltip>
-        )}
-        <ToggleGroup
-          aria-label="Diff layout"
-          className="shrink-0"
-          variant="segmented"
-          value={[diffLayout]}
-          onValueChange={(value) => {
-            const next = value[0];
-            if (next === "stacked" || next === "split") {
-              updateClientSettings({ diffLayout: next });
-            }
-          }}
-        >
-          <Toggle aria-label="Stacked diff view" value="stacked">
-            <Rows3Icon className="size-3.5" />
-          </Toggle>
-          <Toggle aria-label="Split diff view" value="split">
-            <Columns2Icon className="size-3.5" />
-          </Toggle>
-        </ToggleGroup>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Toggle
-                aria-label={wordWrap ? "Disable diff line wrapping" : "Enable diff line wrapping"}
-                variant="ghost"
-                size="sm"
-                pressed={wordWrap}
-                onPressedChange={(pressed) => {
-                  setWordWrap(Boolean(pressed));
-                }}
-              />
-            }
-          >
-            <TextWrapIcon className="size-3.5" />
-          </TooltipTrigger>
-          <TooltipPopup side="top">
-            {wordWrap ? "Disable line wrapping" : "Enable line wrapping"}
-          </TooltipPopup>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Toggle
-                aria-label={
-                  diffIgnoreWhitespace ? "Show whitespace changes" : "Hide whitespace changes"
+          <div className="hidden @min-[24rem]/diff-toolbar:block">
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Toggle
+                    aria-label={
+                      diffIgnoreWhitespace ? "Show whitespace changes" : "Hide whitespace changes"
+                    }
+                    variant="ghost"
+                    size="sm"
+                    pressed={diffIgnoreWhitespace}
+                    onPressedChange={(pressed) => {
+                      setDiffIgnoreWhitespace(Boolean(pressed));
+                    }}
+                  />
                 }
-                variant="ghost"
-                size="sm"
-                pressed={diffIgnoreWhitespace}
-                onPressedChange={(pressed) => {
-                  setDiffIgnoreWhitespace(Boolean(pressed));
-                }}
-              />
-            }
-          >
-            <PilcrowIcon className="size-3.5" />
-          </TooltipTrigger>
-          <TooltipPopup side="top">
-            {diffIgnoreWhitespace ? "Show whitespace changes" : "Hide whitespace changes"}
-          </TooltipPopup>
-        </Tooltip>
-        {testFileCount > 0 && (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Toggle
-                  aria-label="Hide test files"
-                  variant="ghost"
-                  size="sm"
-                  pressed={hideTestFiles}
-                  onPressedChange={(pressed) => setHideTestFiles(Boolean(pressed))}
-                />
-              }
-            >
-              <FlaskConicalOffIcon className="size-3.5" />
-            </TooltipTrigger>
-            <TooltipPopup side="top">
-              {hideTestFiles
-                ? `Show ${testFileCount} hidden test ${testFileCount === 1 ? "file" : "files"}`
-                : "Hide test files"}
-            </TooltipPopup>
-          </Tooltip>
-        )}
-        {diffFileKeys.length > 0 && (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Toggle
-                  aria-label={fileTreeOpen ? "Hide file tree" : "Show file tree"}
-                  variant="ghost"
-                  size="sm"
-                  pressed={fileTreeOpen}
-                  onPressedChange={(pressed) => setFileTreeOpen(Boolean(pressed))}
-                />
-              }
-            >
-              <FolderTreeIcon className="size-3.5" />
-            </TooltipTrigger>
-            <TooltipPopup side="top">
-              {fileTreeOpen ? "Hide file tree" : "Show file tree"}
-            </TooltipPopup>
-          </Tooltip>
-        )}
+              >
+                <PilcrowIcon className="size-3.5" />
+              </TooltipTrigger>
+              <TooltipPopup side="top">
+                {diffIgnoreWhitespace ? "Show whitespace changes" : "Hide whitespace changes"}
+              </TooltipPopup>
+            </Tooltip>
+          </div>
+          {testFileCount > 0 && (
+            <div className="hidden @min-[24rem]/diff-toolbar:block">
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Toggle
+                      aria-label="Hide test files"
+                      variant="ghost"
+                      size="sm"
+                      pressed={hideTestFiles}
+                      onPressedChange={(pressed) => setHideTestFiles(Boolean(pressed))}
+                    />
+                  }
+                >
+                  <FlaskConicalOffIcon className="size-3.5" />
+                </TooltipTrigger>
+                <TooltipPopup side="top">
+                  {hideTestFiles
+                    ? `Show ${testFileCount} hidden test ${testFileCount === 1 ? "file" : "files"}`
+                    : "Hide test files"}
+                </TooltipPopup>
+              </Tooltip>
+            </div>
+          )}
+          {diffFileKeys.length > 0 && (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Toggle
+                    aria-label={fileTreeOpen ? "Hide file tree" : "Show file tree"}
+                    variant="ghost"
+                    size="sm"
+                    pressed={fileTreeOpen}
+                    onPressedChange={(pressed) => setFileTreeOpen(Boolean(pressed))}
+                  />
+                }
+              >
+                <FolderTreeIcon className="size-3.5" />
+              </TooltipTrigger>
+              <TooltipPopup side="top">
+                {fileTreeOpen ? "Hide file tree" : "Show file tree"}
+              </TooltipPopup>
+            </Tooltip>
+          )}
+        </div>
+        <DiffOptionsMenu
+          ignoreWhitespace={diffIgnoreWhitespace}
+          onIgnoreWhitespaceChange={setDiffIgnoreWhitespace}
+          files={
+            diffFileKeys.length > 0
+              ? {
+                  collapsed: allDiffFilesCollapsed,
+                  onToggleCollapsed: toggleDiffFileCollapse,
+                }
+              : null
+          }
+          testFiles={
+            testFileCount > 0
+              ? {
+                  hidden: hideTestFiles,
+                  onHiddenChange: setHideTestFiles,
+                }
+              : null
+          }
+        />
       </div>
     </>
   );
