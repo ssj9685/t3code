@@ -817,11 +817,11 @@ export default function DiffPanel({
 
   const headerRow = (
     <>
-      <div className="@container/diff-refs flex min-w-0 flex-1 items-center gap-3 [-webkit-app-region:no-drag]">
+      <div className="@container/diff-refs flex min-w-0 flex-1 basis-52 items-center gap-2 [-webkit-app-region:no-drag]">
         <DropdownMenu>
           <DropdownMenuTrigger
             render={<Button size="xs" variant="secondary" />}
-            className={cn("max-w-full", headerCommitSha !== null && "min-w-0 shrink")}
+            className="min-w-0 max-w-full shrink"
             aria-label={`Diff scope: ${selectedScopeLabel}`}
             data-workspace-focus-default
           >
@@ -985,7 +985,7 @@ export default function DiffPanel({
         </DropdownMenu>
         {canSelectBranchBase && (
           <div
-            className="flex min-w-0 max-w-full items-center gap-2 overflow-hidden text-xs text-muted-foreground"
+            className="flex min-w-0 max-w-full flex-1 items-center gap-2 overflow-hidden text-xs text-muted-foreground"
             aria-label={`Comparing ${comparisonHeadRef} against ${comparisonBaseRef}`}
           >
             <Tooltip>
@@ -1025,14 +1025,24 @@ export default function DiffPanel({
                 selectBranchBaseRef(value === AUTOMATIC_BASE_REF ? null : value);
               }}
             >
-              <ComboboxTrigger
-                render={<Button variant="ghost-muted" size="xs" />}
-                className="min-w-9 max-w-48 shrink-0"
-                aria-label={`Change comparison target. Currently ${comparisonBaseRef}`}
-              >
-                <span className="min-w-0 truncate">{comparisonBaseRef}</span>
-                <ChevronDownIcon className="size-3.5 shrink-0 opacity-70" />
-              </ComboboxTrigger>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <ComboboxTrigger
+                      render={<Button variant="ghost-muted" size="xs" />}
+                      className="min-w-16 max-w-48 shrink"
+                      aria-label={`Change comparison target. Currently ${comparisonBaseRef}`}
+                    >
+                      <span className="flex min-w-0">
+                        <span className="truncate">{comparisonBaseRef.slice(0, -5)}</span>
+                        <span className="shrink-0">{comparisonBaseRef.slice(-5)}</span>
+                      </span>
+                      <ChevronDownIcon className="size-3.5 shrink-0 opacity-70" />
+                    </ComboboxTrigger>
+                  }
+                />
+                <TooltipPopup side="top">{`${comparisonHeadRef} → ${comparisonBaseRef}`}</TooltipPopup>
+              </Tooltip>
               <ComboboxPopup
                 align="start"
                 className="w-72 min-w-0 max-w-[calc(100vw-1rem)] overflow-hidden"
@@ -1112,13 +1122,6 @@ export default function DiffPanel({
             </Combobox>
           </div>
         )}
-      </div>
-      <div
-        className={cn(
-          "flex shrink-0 items-center gap-1 [-webkit-app-region:no-drag]",
-          headerCommitSha !== null && "gap-0",
-        )}
-      >
         {codeViewFiles.length > 0 || (isGitSelection && selectedGitSource?.files?.length) ? (
           <DiffStatLabel
             additions={diffLineStat.additions}
@@ -1127,6 +1130,13 @@ export default function DiffPanel({
             layout="inline"
           />
         ) : null}
+      </div>
+      <div
+        className={cn(
+          "ml-auto flex max-w-full flex-wrap items-center gap-1 [-webkit-app-region:no-drag]",
+          headerCommitSha !== null && "gap-0",
+        )}
+      >
         {canRefreshGitDiff && (
           <Tooltip>
             <TooltipTrigger
@@ -1147,55 +1157,32 @@ export default function DiffPanel({
             </TooltipPopup>
           </Tooltip>
         )}
-        <DiffOptionsMenu
-          wordWrap={wordWrap}
-          onWordWrapChange={setWordWrap}
-          ignoreWhitespace={diffIgnoreWhitespace}
-          onIgnoreWhitespaceChange={setDiffIgnoreWhitespace}
-          diffLayout={diffLayout}
-          onDiffLayoutChange={(value) => updateClientSettings({ diffLayout: value })}
-          files={
-            diffFileKeys.length > 0
-              ? {
-                  collapsed: allDiffFilesCollapsed,
-                  onToggleCollapsed: toggleDiffFileCollapse,
-                  treeOpen: fileTreeOpen,
-                  onTreeOpenChange: setFileTreeOpen,
-                }
-              : null
-          }
-          testFiles={
-            testFileCount > 0
-              ? {
-                  hidden: hideTestFiles,
-                  onHiddenChange: setHideTestFiles,
-                }
-              : null
-          }
-        />
-        <div className="hidden items-center gap-1 @min-[36rem]/diff-toolbar:flex">
+
+        <div className="flex flex-wrap items-center gap-1">
           {diffFileKeys.length > 0 && (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    type="button"
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label={allDiffFilesCollapsed ? "Expand all files" : "Collapse all files"}
-                    onClick={toggleDiffFileCollapse}
+            <div className="hidden @min-[24rem]/diff-toolbar:block">
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      type="button"
+                      size="icon-sm"
+                      variant="ghost"
+                      aria-label={allDiffFilesCollapsed ? "Expand all files" : "Collapse all files"}
+                      onClick={toggleDiffFileCollapse}
+                    />
+                  }
+                >
+                  <MorphIcon
+                    className="size-3.5"
+                    icon={allDiffFilesCollapsed ? ChevronsUpDown : ChevronsDownUp}
                   />
-                }
-              >
-                <MorphIcon
-                  className="size-3.5"
-                  icon={allDiffFilesCollapsed ? ChevronsUpDown : ChevronsDownUp}
-                />
-              </TooltipTrigger>
-              <TooltipPopup side="top">
-                {allDiffFilesCollapsed ? "Expand all files" : "Collapse all files"}
-              </TooltipPopup>
-            </Tooltip>
+                </TooltipTrigger>
+                <TooltipPopup side="top">
+                  {allDiffFilesCollapsed ? "Expand all files" : "Collapse all files"}
+                </TooltipPopup>
+              </Tooltip>
+            </div>
           )}
           <ToggleGroup
             aria-label="Diff layout"
@@ -1236,49 +1223,53 @@ export default function DiffPanel({
               {wordWrap ? "Disable line wrapping" : "Enable line wrapping"}
             </TooltipPopup>
           </Tooltip>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Toggle
-                  aria-label={
-                    diffIgnoreWhitespace ? "Show whitespace changes" : "Hide whitespace changes"
-                  }
-                  variant="ghost"
-                  size="sm"
-                  pressed={diffIgnoreWhitespace}
-                  onPressedChange={(pressed) => {
-                    setDiffIgnoreWhitespace(Boolean(pressed));
-                  }}
-                />
-              }
-            >
-              <PilcrowIcon className="size-3.5" />
-            </TooltipTrigger>
-            <TooltipPopup side="top">
-              {diffIgnoreWhitespace ? "Show whitespace changes" : "Hide whitespace changes"}
-            </TooltipPopup>
-          </Tooltip>
-          {testFileCount > 0 && (
+          <div className="hidden @min-[24rem]/diff-toolbar:block">
             <Tooltip>
               <TooltipTrigger
                 render={
                   <Toggle
-                    aria-label="Hide test files"
+                    aria-label={
+                      diffIgnoreWhitespace ? "Show whitespace changes" : "Hide whitespace changes"
+                    }
                     variant="ghost"
                     size="sm"
-                    pressed={hideTestFiles}
-                    onPressedChange={(pressed) => setHideTestFiles(Boolean(pressed))}
+                    pressed={diffIgnoreWhitespace}
+                    onPressedChange={(pressed) => {
+                      setDiffIgnoreWhitespace(Boolean(pressed));
+                    }}
                   />
                 }
               >
-                <FlaskConicalOffIcon className="size-3.5" />
+                <PilcrowIcon className="size-3.5" />
               </TooltipTrigger>
               <TooltipPopup side="top">
-                {hideTestFiles
-                  ? `Show ${testFileCount} hidden test ${testFileCount === 1 ? "file" : "files"}`
-                  : "Hide test files"}
+                {diffIgnoreWhitespace ? "Show whitespace changes" : "Hide whitespace changes"}
               </TooltipPopup>
             </Tooltip>
+          </div>
+          {testFileCount > 0 && (
+            <div className="hidden @min-[24rem]/diff-toolbar:block">
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Toggle
+                      aria-label="Hide test files"
+                      variant="ghost"
+                      size="sm"
+                      pressed={hideTestFiles}
+                      onPressedChange={(pressed) => setHideTestFiles(Boolean(pressed))}
+                    />
+                  }
+                >
+                  <FlaskConicalOffIcon className="size-3.5" />
+                </TooltipTrigger>
+                <TooltipPopup side="top">
+                  {hideTestFiles
+                    ? `Show ${testFileCount} hidden test ${testFileCount === 1 ? "file" : "files"}`
+                    : "Hide test files"}
+                </TooltipPopup>
+              </Tooltip>
+            </div>
           )}
           {diffFileKeys.length > 0 && (
             <Tooltip>
@@ -1301,6 +1292,26 @@ export default function DiffPanel({
             </Tooltip>
           )}
         </div>
+        <DiffOptionsMenu
+          ignoreWhitespace={diffIgnoreWhitespace}
+          onIgnoreWhitespaceChange={setDiffIgnoreWhitespace}
+          files={
+            diffFileKeys.length > 0
+              ? {
+                  collapsed: allDiffFilesCollapsed,
+                  onToggleCollapsed: toggleDiffFileCollapse,
+                }
+              : null
+          }
+          testFiles={
+            testFileCount > 0
+              ? {
+                  hidden: hideTestFiles,
+                  onHiddenChange: setHideTestFiles,
+                }
+              : null
+          }
+        />
       </div>
     </>
   );
