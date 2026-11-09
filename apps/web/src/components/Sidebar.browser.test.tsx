@@ -406,6 +406,17 @@ it.each([
           new PointerEvent("pointermove", {
             ...pointer,
             clientX: space.left + 40,
+            clientY: space.bottom + 6,
+          }),
+        );
+        await expect
+          .element(screen.getByRole("status").filter({ hasText: "Move here" }))
+          .toBeVisible();
+        expect(screen.container.querySelector("[data-sidebar-drop-space]")).toBe(gap);
+        document.dispatchEvent(
+          new PointerEvent("pointermove", {
+            ...pointer,
+            clientX: space.left + 40,
             clientY: space.top + space.height / 2,
           }),
         );

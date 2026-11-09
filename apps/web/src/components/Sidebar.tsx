@@ -1803,14 +1803,14 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       const list = threadListRef.current;
       if (!source || !list || pointerOutsideThreadList(point)) return null;
       const sourceGroup = groupDragSource(source);
-      const containsPoint = (element: Element | null) => {
+      const containsPoint = (element: Element | null, margin = 0) => {
         const rect = element?.getBoundingClientRect();
         return (
           rect &&
           point.x >= rect.left &&
           point.x <= rect.right &&
-          point.y >= rect.top &&
-          point.y <= rect.bottom
+          point.y >= rect.top - margin &&
+          point.y <= rect.bottom + margin
         );
       };
       if (!sourceGroup && containsPoint(dragHintRef.current))
@@ -1818,7 +1818,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       // Keep the opened space a stable target while surrounding rows animate away.
       if (
         manualDrop?.kind === "reorder" &&
-        containsPoint(list.querySelector("[data-sidebar-drop-space]"))
+        containsPoint(list.querySelector("[data-sidebar-drop-space]"), 8)
       )
         return manualDrop;
       const sourceSection = sourceGroup?.section ?? sectionByThreadKey.get(source);
@@ -1827,7 +1827,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       for (const element of list.querySelectorAll<HTMLElement>(
         "[data-thread-group], [data-sidebar-row]",
       )) {
-        const rect = element.getBoundingClientRect();
+        // Animated rows must not move their own drop thresholds under a stationary pointer.
+        const rect =
+          manualDrop?.kind === "reorder"
+            ? (listMotionRef.current?.targetRect(element) ?? element.getBoundingClientRect())
+            : element.getBoundingClientRect();
         if (
           point.x < rect.left ||
           point.x > rect.right ||
