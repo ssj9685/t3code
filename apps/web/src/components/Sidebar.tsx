@@ -1345,7 +1345,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     section?: SidebarSection;
     after?: boolean;
     groupId?: string | undefined;
-    lineTop?: number;
     id: string;
     label: string;
   } | null>(null);
@@ -1740,6 +1739,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   };
 
   const isContextDrag = dragState?.contextDrag === true || dragState?.activeSection === "working";
+  const manualLayout =
+    isContextDrag ||
+    manualDrop !== null ||
+    threadGroups.length > 0 ||
+    Object.keys(itemOrder).length > 0;
   const dragTargetSection = isContextDrag ? null : (dragState?.targetSection ?? null);
   const finishThreadDrag = (started: boolean) => {
     dragSensorRef.current = null;
@@ -1817,16 +1821,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         containsPoint(list.querySelector("[data-sidebar-drop-space]"))
       )
         return manualDrop;
-      const layoutY = (element: HTMLElement, after: boolean) => {
-        const rect = element.getBoundingClientRect();
-        const root = element.closest("li");
-        const translate = root ? getComputedStyle(root).translate.split(" ")[1] : undefined;
-        const scale =
-          list.offsetWidth > 0 ? list.getBoundingClientRect().width / list.offsetWidth : 1;
-        return (
-          (after ? rect.bottom : rect.top) - (Number.parseFloat(translate ?? "0") || 0) * scale
-        );
-      };
       const sourceSection = sourceGroup?.section ?? sectionByThreadKey.get(source);
       const selected = useThreadSelectionStore.getState().selectedThreadKeys;
       const moving = selected.has(source) ? selected : new Set([source]);
@@ -1861,22 +1855,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             (sourceGroup ? targetId !== `group:${sourceGroup.group.id}` : !moving.has(targetId))
           ) {
             const after = point.y > rect.top + rect.height / 2;
-            let lineY = layoutY(element, after);
-            if (targetId.startsWith("group:") && destinationGroup) {
-              const parent = `group:${targetSection}:${destinationGroup.id}`;
-              for (const row of list.querySelectorAll<HTMLElement>("[data-sidebar-row]")) {
-                if (!after && row.dataset.sidebarRow === parent) lineY = layoutY(row, false);
-                if (after && row.dataset.sidebarParent === parent)
-                  lineY = Math.max(lineY, layoutY(row, true));
-              }
-            }
             return {
               kind: "reorder" as const,
               id: targetId,
               section: targetSection,
               after,
               groupId: sourceGroup || groupId ? undefined : destinationGroup?.id,
-              lineTop: lineY - list.getBoundingClientRect().top,
               label: "Move here",
             };
           }
@@ -1948,7 +1932,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       current?.kind === target?.kind &&
       current?.id === target?.id &&
       current?.after === target?.after &&
-      current?.lineTop === target?.lineTop
+      current?.section === target?.section
         ? current
         : target,
     );
@@ -2190,9 +2174,13 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     sidebarListItemsKey,
     visibleDraftSessionCount,
     routeDraftIdForRows ?? "",
+    manualDrop?.kind === "reorder"
+      ? `${manualDrop.section}:${manualDrop.id}:${manualDrop.after}`
+      : "",
+    dragState !== null && manualLayout ? "manual-drag" : "",
   ].join("\0");
   const listMotionAnimate =
-    dragState === null && sidebarListItems.length + visibleDraftSessionCount > 0;
+    (dragState === null || manualLayout) && sidebarListItems.length + visibleDraftSessionCount > 0;
   // Cache on both fields so layout-key changes trigger the effect even when animate is unchanged.
   const listMotionPass = { layoutKey: listMotionLayoutKey, animate: listMotionAnimate };
   const shelfExpansionKey = [workingShelfExpanded, snoozedShelfExpanded, settledShelfExpanded].join(
@@ -2230,11 +2218,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         });
   const sidebarSortingStrategy = createSidebarSortingStrategy({
     items: sidebarListItems,
-    enabled:
-      !isContextDrag &&
-      manualDrop === null &&
-      threadGroups.length === 0 &&
-      Object.keys(itemOrder).length === 0,
+    enabled: !manualLayout,
     boundaryLabelHeight: SIDEBAR_DRAG_LABEL_HEIGHT,
     settledOrder: draggedSettledOrder,
     ...(draggedActiveOrder === undefined ? {} : { activeOrder: draggedActiveOrder }),
@@ -3724,9 +3708,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                     // controls.
                     role="presentation"
                     className={cn(
-                      "relative flex flex-col gap-px motion-reduce:[&>li]:transition-none! [&>li[data-sidebar-drop-space]~li]:translate-y-10",
-                      dragState !== null &&
-                        "[&>li]:transition-[translate] [&>li]:duration-150 [&>li]:ease-out",
+                      "relative flex flex-col gap-px motion-reduce:[&>li]:transition-none!",
                       sidebarListItems.length > 0 && "flex-1",
                       actionSweep !== null && "**:pointer-events-none",
                       // Projected rows (two boundary labels, two hints) extend the scroll range; a range that
@@ -3884,8 +3866,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                             key="manual-drop-space"
                             data-sidebar-drop-space
                             aria-hidden
-                            className="pointer-events-none absolute inset-x-0 z-10 h-10 list-none rounded-md border border-dashed border-ring/40 bg-sidebar-row-hover"
-                            style={{ top: manualDrop.lineTop }}
+                            className="pointer-events-none h-10 shrink-0 list-none rounded-md border border-dashed border-ring/40 bg-sidebar-row-hover"
                           />,
                         );
                       };
@@ -3946,6 +3927,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                 marker="pinned-header"
                                 label="Pinned"
                                 visible={from !== null}
+                                reserveSpace={manualLayout}
                                 isDropTarget={dragTargetSection === "pinned"}
                               />,
                             );
@@ -3957,6 +3939,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                 marker="pinned-divider"
                                 label="Active"
                                 visible={from !== null}
+                                reserveSpace={manualLayout}
                                 isDropTarget={dragTargetSection === "active"}
                               />,
                             );

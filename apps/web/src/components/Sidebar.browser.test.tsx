@@ -100,10 +100,13 @@ describe("sidebar header new thread", () => {
   });
 });
 
-it.each(["selection", "drag"])(
-  "creates manual groups with $0 and preserves them when collapsed",
-  async (method) => {
-    const section = "Working";
+it.each([
+  { method: "selection", section: "Working" },
+  { method: "drag", section: "Working" },
+  { method: "drag", section: "Active" },
+])(
+  "creates manual groups with $method in $section and preserves them when collapsed",
+  async ({ method, section }) => {
     using stack = new DisposableStack();
     const storedOrder = localStorage.getItem(SIDEBAR_ITEM_ORDER_KEY);
     localStorage.removeItem(SIDEBAR_ITEM_ORDER_KEY);
@@ -124,7 +127,7 @@ it.each(["selection", "drag"])(
       ...DEFAULT_CLIENT_SETTINGS,
       boringSidebarEnabled: method === "selection",
       legacySidebarEnabled: false,
-      sidebarWorkingShelfEnabled: true,
+      sidebarWorkingShelfEnabled: section === "Working",
     });
     const projects = [project("alpha"), project("beta")];
     const threads = [projects[0]!, projects[1]!, projects[0]!].map((project, index) =>
@@ -162,13 +165,24 @@ it.each(["selection", "drag"])(
         </div>
       </SidebarProvider>,
     );
-    const shelf = screen.getByRole("button", { name: new RegExp(`^${section}\\s*3$`) });
-    await expect.element(shelf).toBeVisible();
-    if (shelf.element().getAttribute("aria-expanded") === "false") await userEvent.click(shelf);
+    if (section === "Working") {
+      const shelf = screen.getByRole("button", { name: new RegExp(`^${section}\\s*3$`) });
+      await expect.element(shelf).toBeVisible();
+      if (shelf.element().getAttribute("aria-expanded") === "false") await userEvent.click(shelf);
+    }
     const taskOrder = () =>
       [...screen.container.querySelectorAll<HTMLElement>("[data-sidebar-row]")]
         .map((row) => row.getAttribute("aria-label"))
         .filter((label) => label?.startsWith(`${section} task`));
+    const settleMotion = async () => {
+      await vi.waitFor(() => {
+        expect(
+          [...screen.container.querySelectorAll("li")]
+            .flatMap((row) => row.getAnimations())
+            .filter((animation) => animation.playState === "running"),
+        ).toHaveLength(0);
+      });
+    };
     const flatOrder = taskOrder();
     expect(flatOrder).toHaveLength(3);
     expect(screen.container.querySelectorAll('[data-testid="sidebar-thread-group"]')).toHaveLength(
@@ -187,8 +201,8 @@ it.each(["selection", "drag"])(
     } else {
       const source = screen.getByRole("button", { name: flatOrder[1]!, exact: true }).element();
       const target = screen.getByRole("button", { name: flatOrder[0]!, exact: true }).element();
+      await settleMotion();
       const sourceRect = source.getBoundingClientRect();
-      const targetRect = target.getBoundingClientRect();
       const pointer = { pointerId: 1, isPrimary: true, button: 0, buttons: 1, bubbles: true };
       source.dispatchEvent(
         new PointerEvent("pointerdown", {
@@ -197,6 +211,18 @@ it.each(["selection", "drag"])(
           clientY: sourceRect.top + sourceRect.height / 2,
         }),
       );
+      document.dispatchEvent(
+        new PointerEvent("pointermove", {
+          ...pointer,
+          clientX: sourceRect.left + 35,
+          clientY: sourceRect.top + sourceRect.height / 2,
+        }),
+      );
+      await vi.waitFor(() =>
+        expect(screen.container.querySelector("[data-sidebar-drag-hint]")).not.toBeNull(),
+      );
+      await settleMotion();
+      const targetRect = target.getBoundingClientRect();
       document.dispatchEvent(
         new PointerEvent("pointermove", {
           ...pointer,
@@ -217,7 +243,10 @@ it.each(["selection", "drag"])(
         }),
       );
     }
-    const group = screen.getByRole("button", { name: "alpha: 2 working threads", exact: true });
+    const group = screen.getByRole("button", {
+      name: `alpha: 2 ${section.toLowerCase()} threads`,
+      exact: true,
+    });
     await expect.element(group).toBeVisible();
     expect(screen.container.querySelectorAll('[data-testid="sidebar-thread-group"]')).toHaveLength(
       1,
@@ -234,8 +263,8 @@ it.each(["selection", "drag"])(
     if (method === "drag") {
       const pointer = { pointerId: 2, isPrimary: true, button: 0, buttons: 1, bubbles: true };
       const source = screen.getByRole("button", { name: flatOrder[2]!, exact: true }).element();
+      await settleMotion();
       const sourceRect = source.getBoundingClientRect();
-      const targetRect = group.element().getBoundingClientRect();
       source.dispatchEvent(
         new PointerEvent("pointerdown", {
           ...pointer,
@@ -243,6 +272,18 @@ it.each(["selection", "drag"])(
           clientY: sourceRect.top + sourceRect.height / 2,
         }),
       );
+      document.dispatchEvent(
+        new PointerEvent("pointermove", {
+          ...pointer,
+          clientX: sourceRect.left + 35,
+          clientY: sourceRect.top + sourceRect.height / 2,
+        }),
+      );
+      await vi.waitFor(() =>
+        expect(screen.container.querySelector("[data-sidebar-drag-hint]")).not.toBeNull(),
+      );
+      await settleMotion();
+      const targetRect = group.element().getBoundingClientRect();
       document.dispatchEvent(
         new PointerEvent("pointermove", {
           ...pointer,
@@ -263,7 +304,12 @@ it.each(["selection", "drag"])(
         }),
       );
       await expect
-        .element(screen.getByRole("button", { name: "alpha: 3 working threads", exact: true }))
+        .element(
+          screen.getByRole("button", {
+            name: `alpha: 3 ${section.toLowerCase()} threads`,
+            exact: true,
+          }),
+        )
         .toBeVisible();
       const removeRect = source.getBoundingClientRect();
       source.dispatchEvent(
@@ -302,14 +348,7 @@ it.each(["selection", "drag"])(
       await expect.element(group).toBeVisible();
       expect(taskOrder()).toHaveLength(3);
       const reorder = async (source: Element, target: Element, after: boolean, cancel = false) => {
-        // Choose the next drag's coordinates after the previous drop has settled.
-        await vi.waitFor(() => {
-          expect(
-            [...screen.container.querySelectorAll("li")]
-              .flatMap((row) => row.getAnimations())
-              .filter((animation) => animation.playState === "running"),
-          ).toHaveLength(0);
-        });
+        await settleMotion();
         const sourceRect = source.getBoundingClientRect();
         source.dispatchEvent(
           new PointerEvent("pointerdown", {
@@ -328,6 +367,7 @@ it.each(["selection", "drag"])(
         await vi.waitFor(() =>
           expect(screen.container.querySelector("[data-sidebar-drag-hint]")).not.toBeNull(),
         );
+        await settleMotion();
         const targetRect = target.getBoundingClientRect();
         document.dispatchEvent(
           new PointerEvent("pointermove", {
@@ -341,15 +381,24 @@ it.each(["selection", "drag"])(
           .toBeVisible();
         const gap = screen.container.querySelector<HTMLElement>("[data-sidebar-drop-space]");
         expect(gap).not.toBeNull();
-        const following = gap!.nextElementSibling as HTMLElement;
         await vi.waitFor(() => {
-          const list = gap!.parentElement!;
-          expect(
-            following.getBoundingClientRect().top -
-              list.getBoundingClientRect().top -
-              following.offsetTop,
-          ).toBeGreaterThan(30);
+          const following = gap!.nextElementSibling!;
+          expect(following.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+            gap!.getBoundingClientRect().bottom - 1,
+          );
         });
+        if (section === "Active") {
+          await vi.waitFor(() => {
+            const boundary = screen.container.querySelector(
+              '[data-testid="sidebar-pinned-divider"]',
+            )!;
+            const label = boundary.firstElementChild!.getBoundingClientRect();
+            const firstRow = screen.container
+              .querySelector("[data-sidebar-row]")!
+              .getBoundingClientRect();
+            expect(firstRow.top).toBeGreaterThanOrEqual(label.bottom);
+          });
+        }
         const hint = screen.container.querySelector("[data-sidebar-drag-hint]")!;
         expect(hint.closest("ul")).toBeNull();
         const space = gap!.getBoundingClientRect();
@@ -397,7 +446,9 @@ it.each(["selection", "drag"])(
       await reorder(third.element(), group.element(), false, true);
       expect(taskOrder()).toEqual([flatOrder[1], flatOrder[0], flatOrder[2]]);
       expect(screen.container.querySelector("[data-sidebar-drop-space]")).toBeNull();
-      expect(JSON.parse(localStorage.getItem(SIDEBAR_ITEM_ORDER_KEY)!).working).toHaveLength(4);
+      expect(
+        JSON.parse(localStorage.getItem(SIDEBAR_ITEM_ORDER_KEY)!)[section.toLowerCase()],
+      ).toHaveLength(4);
     }
     const persisted = JSON.parse(localStorage.getItem(SIDEBAR_THREAD_GROUPS_KEY)!);
     expect(persisted).toHaveLength(1);

@@ -463,9 +463,7 @@ export function SortableThreadRow(
     listeners,
     setNodeRef,
     transform: contextDrag ? null : transform,
-    transition: contextDrag
-      ? `${transition ?? "transform 150ms ease-out"}, translate 150ms ease-out`
-      : transition,
+    transition: contextDrag ? undefined : transition,
     isDragging: isDragging && !contextDrag,
   };
   // The sidebar arranges rows from quiet shells, which hold still while a
