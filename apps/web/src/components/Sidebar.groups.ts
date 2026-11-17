@@ -83,3 +83,20 @@ export function moveSidebarItem(
   next.splice(index + Number(after), 0, ...new Set(moving));
   return next;
 }
+
+export function placeSidebarGroup(
+  savedOrder: readonly string[],
+  displayedOrder: readonly string[],
+  groupId: string,
+  target: string,
+): readonly string[] {
+  const displayed = [...new Set(displayedOrder)];
+  if (!displayed.includes(target)) return savedOrder;
+  const visible = new Set(displayed);
+  let index = 0;
+  const order = [...new Set(savedOrder)].map((key) =>
+    visible.has(key) ? displayed[index++]! : key,
+  );
+  order.push(...displayed.slice(index));
+  return moveSidebarItem(order, [`group:${groupId}`], target, false);
+}

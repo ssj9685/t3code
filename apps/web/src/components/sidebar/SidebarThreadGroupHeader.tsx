@@ -51,7 +51,7 @@ export function SidebarThreadGroupHeader(props: {
             aria-expanded={!props.collapsed}
             className={cn(
               "flex h-8 w-full cursor-pointer items-center gap-2 rounded-(--control-radius) px-(--sidebar-row-content-inset) text-left text-xs text-sidebar-muted-foreground outline-none hover:bg-sidebar-row-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-              props.dropTarget && "bg-sidebar-row-active ring-2 ring-inset ring-ring",
+              props.dropTarget && "bg-sidebar-row-hover ring-1 ring-inset ring-ring/50",
             )}
             onClick={props.onToggle}
             onContextMenu={(event) => {

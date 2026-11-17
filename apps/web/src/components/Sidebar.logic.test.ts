@@ -1231,16 +1231,7 @@ describe("Working shelf (beta)", () => {
           activeReorderableKeys: writable.activeReorderableThreadKeys,
         });
         const assignments =
-          plan.kind === "move-active" || plan.kind === "reorder-pinned"
-            ? plan.assignments
-            : plan.kind === "pin"
-              ? [
-                  ...plan.extraAssignments,
-                  ...(plan.orderKey === undefined
-                    ? []
-                    : [{ id: keyOf(input.moved), orderKey: plan.orderKey }]),
-                ]
-              : [];
+          plan.kind === "move-active" || plan.kind === "reorder-pinned" ? plan.assignments : [];
         const assignedKeys = new Map(assignments.map(({ id, orderKey }) => [id, orderKey]));
         const actualOrder = sort(
           input.rows.map((entry) => ({
@@ -1390,7 +1381,7 @@ describe("Working shelf (beta)", () => {
       );
     });
 
-    it("only changes lifecycle when the inbox is time-ordered", () => {
+    it("preserves pins and only changes lifecycle when the inbox is time-ordered", () => {
       const base = {
         pinnedOrder: ["p1"],
         pinnedKeysById: new Map([["p1", "m"]]),
@@ -1409,21 +1400,34 @@ describe("Working shelf (beta)", () => {
           target: { section: "active", pinnedOrder: ["p1"], activeOrder: ["a2", "a1"] },
         }),
       ).toEqual({ kind: "none" });
+      for (const activeTimeOrdered of [false, true]) {
+        for (const section of ["active", "working", "snoozed", "settled"] as const) {
+          for (const [from, to] of [
+            ["pinned", section],
+            [section, "pinned"],
+          ] as const) {
+            if (to === "working" || to === "snoozed") continue;
+            expect(
+              planSidebarThreadDrop({
+                ...base,
+                activeTimeOrdered,
+                activeKey: "p1",
+                activeSection: from,
+                target: { section: to, pinnedOrder: ["p1"], activeOrder: ["a1", "p1", "a2"] },
+              }),
+            ).toEqual({ kind: "none" });
+            expect(resolveSidebarDropVerb(from, to)).toBeNull();
+          }
+        }
+      }
       expect(
         planSidebarThreadDrop({
           ...base,
-          activeKey: "p1",
-          activeSection: "pinned",
-          target: { section: "active", pinnedOrder: [], activeOrder: ["a1", "p1", "a2"] },
+          activeKey: "s1",
+          activeSection: "settled",
+          target: { section: "active", pinnedOrder: ["p1"], activeOrder: ["a1", "s1", "a2"] },
         }),
-      ).toEqual({
-        kind: "move-active",
-        order: null,
-        assignments: [],
-        unpin: true,
-        unsettle: false,
-        unsnooze: false,
-      });
+      ).toMatchObject({ kind: "move-active", unsettle: true, order: null });
     });
   });
 });

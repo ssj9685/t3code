@@ -431,7 +431,7 @@ function SnoozeMenuButton(props: {
 type SortableThreadRowBag = Pick<
   ReturnType<typeof useSortable>,
   "listeners" | "setNodeRef" | "transform" | "transition" | "isDragging"
->;
+> & { isPlaceholder?: boolean };
 
 export const draftSurfaceClassName = "bg-warning/4 hover:bg-warning/8";
 export const draftPenClassName = "size-3 shrink-0 text-warning-foreground";
@@ -465,6 +465,7 @@ export function SortableThreadRow(
     transform: contextDrag ? null : transform,
     transition: contextDrag ? undefined : transition,
     isDragging: isDragging && !contextDrag,
+    isPlaceholder: isDragging && contextDrag,
   };
   // The sidebar arranges rows from quiet shells, which hold still while a
   // thread streams; reading the live shell here re-renders only this row.
@@ -476,18 +477,6 @@ export function SortableThreadRow(
 }
 export type SidebarSweepAction = "settle" | "unsettle" | "unsnooze";
 const dropVerbBadge: Record<SidebarDropVerb, ReactNode> = {
-  pin: (
-    <>
-      <PinIcon aria-hidden className="size-3" />
-      Pin
-    </>
-  ),
-  unpin: (
-    <>
-      <PinOffIcon aria-hidden className="size-3" />
-      Unpin
-    </>
-  ),
   settle: (
     <>
       <CircleCheckIcon aria-hidden className="size-3" />
@@ -941,7 +930,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   };
 
   const rowSurfaceClassName = cn(
-    props.groupDropTarget && "ring-2 ring-inset ring-ring bg-sidebar-row-active",
+    props.groupDropTarget && "ring-1 ring-inset ring-ring/50 bg-sidebar-row-hover",
     "group/sidebar-row relative w-full cursor-pointer overflow-hidden rounded-md text-left outline-none select-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
     variantAction === "unsettle" &&
       !props.isActive &&
@@ -970,6 +959,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
         style: {
           transform: CSS.Translate.toString(sortable.transform),
           transition: sortable.transition,
+          opacity: sortable.isPlaceholder ? 0.4 : undefined,
           // A zero-height boundary also makes dnd-kit scale the source to
           // zero. Only projected peers use scaleY as a visibility sentinel.
           visibility:

@@ -79,24 +79,18 @@ scroll position instead of following the thread to its new place in the list.
 
 Pinning does not prevent automatic settlement. Settling a thread removes its pin.
 
-On web and desktop, drag a thread between sections to change its state. Drag a thread up into
-the pinned section to pin it at the spot you drop it; drag a pinned thread down into the active
-list to unpin it. Dragging a thread onto the **Settled** header settles it, and dragging a settled
-thread into the active list un-settles it. A snoozed thread can be dragged out of the snoozed
-shelf, which wakes it, but threads cannot be dragged into the shelf because snoozing needs a wake
-time. Dragging a pinned thread out of the pinned section does not ask for unpin confirmation.
-Pinned and active boundary labels appear only while dragging, without moving the rows. The
-other rows slide aside to show where the thread will land. When you cross into another section,
-the dragged thread shows the action the drop performs, with its icon: **Pin**, **Unpin**,
-**Settle**, **Un-settle**, or **Wake**. Its status and hover actions hide during the drag. A pinned
-thread keeps its pin only while it stays in the pinned section; once it leaves, the badge takes
-over. Reordering within the same section shows no badge. When there are no pins, drag to the top
-edge to pin a thread. Section labels stay readable for the whole drag, and the section the
-thread is over takes the accent color. Section labels also
-identify empty sections and a collapsed settled shelf.
+On web and desktop, pinned threads stay in the pinned section when dragged. You can
+reorder them within that section; use the thread menu to pin or unpin a thread.
+Dragging an unpinned thread onto **Settled** settles it, and dragging a settled
+thread into the active list un-settles it. Dragging a snoozed thread into the active
+list wakes it. Threads cannot be dragged into the snoozed shelf because snoozing
+needs a wake time.
 
-On web and desktop, drag a task or group within its section to change its position. Drop at a
-row’s top or bottom edge when space opens between the surrounding rows. This order is saved on this client. On
+On web and desktop, drag a task or group within its section to change its position. Drop above
+or below another row’s center to reorder. Hold over its center to see the tasks grouped in
+the list, then release to keep that arrangement. Moving away or pressing Escape restores the
+original arrangement. Drag a grouped task to the list’s left margin to see it move out of its
+group, then release to keep it separate. This order is saved on this client. On
 mobile, open a thread's menu and choose **Arrange threads**. Drag a handle within or between
 **Pinned** and **Active** to reorder, pin, or unpin. Drop onto the **Settled** divider to
 settle a thread. The dragged card shows the action before you release it. Expand **Snoozed**
@@ -168,8 +162,8 @@ The action count is the number affected, including loaded members hidden by a pr
 threads unavailable from disconnected environments or not loaded are excluded. Individual task
 state changes keep group membership, so one group may appear in several sections.
 
-To remove a task, use **Remove from group** in its menu or drag it to the removal area shown
-while dragging. Removing a group does not delete its tasks or change their states. Groups are
+To remove a task, use **Remove from group** in its menu or drag it to the list’s left margin.
+The list previews the task leaving its group before you release. Removing a group does not delete its tasks or change their states. Groups are
 one level deep and saved on this client; they do not sync to another browser, device, or the
 native mobile app. **Settings → Labs → Compact sidebar** changes row density without creating
 automatic project groups.
