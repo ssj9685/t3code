@@ -12,7 +12,7 @@ function swipe(target: Element, deltaX: number) {
   }
 }
 
-describe.each(["MacIntel", "Win32"])("HistorySwipeNavigation on %s", (platform) => {
+describe("HistorySwipeNavigation", () => {
   it.each([
     ["scrolling left inside a shadow-root scroller keeps the thread", "shadow", 100, -130, false],
     ["scrolling right inside a shadow-root scroller keeps the thread", "shadow", 100, 130, false],
@@ -29,7 +29,7 @@ describe.each(["MacIntel", "Win32"])("HistorySwipeNavigation on %s", (platform) 
     ["a swipe that started in a closed dialog keeps the thread", "closed-dialog", 0, -130, false],
   ] as const)("%s", async (_name, scroller, scrollLeft, deltaX, navigates) => {
     navigateHistory.mockReset();
-    using _platform = vi.spyOn(navigator, "platform", "get").mockReturnValue(platform);
+    using _platform = vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
     await using screen = await render(<HistorySwipeNavigation />);
     const panel = screen.container.appendChild(document.createElement("div"));
     const root = scroller.startsWith("shadow") ? panel.attachShadow({ mode: "open" }) : panel;
@@ -57,6 +57,50 @@ describe.each(["MacIntel", "Win32"])("HistorySwipeNavigation on %s", (platform) 
       swipe(content, deltaX);
     }
 
-    expect(navigateHistory).toHaveBeenCalledTimes(navigates && platform !== "MacIntel" ? 1 : 0);
+    expect(navigateHistory).toHaveBeenCalledTimes(navigates ? 1 : 0);
+  });
+
+  it("a horizontal mouse wheel tick off macOS keeps the thread", async () => {
+    navigateHistory.mockReset();
+    using _platform = vi.spyOn(navigator, "platform", "get").mockReturnValue("Win32");
+    await using screen = await render(<HistorySwipeNavigation />);
+    const content = screen.container.appendChild(document.createElement("div"));
+    content.style.cssText = "height: 20px; width: 100px";
+
+    swipe(content, -120);
+
+    expect(navigateHistory).not.toHaveBeenCalled();
+  });
+
+  // A vertical scroll 15° off vertical.
+  const drift = Array.from({ length: 30 }, () => [-4, 15] as const);
+  it.each([
+    [
+      "a vertical scroll that starts slightly diagonally keeps the thread",
+      [[-5, 3], ...drift],
+      false,
+    ],
+    [
+      "a swipe that leans diagonally for two events navigates",
+      [
+        [-5, 3],
+        [-2, 2],
+        [-150, 0],
+      ],
+      true,
+    ],
+    ["a single diagonal event past the trigger keeps the thread", [[-130, 100]], false],
+  ] as const)("%s", async (_name, events, navigates) => {
+    navigateHistory.mockReset();
+    using _platform = vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
+    await using screen = await render(<HistorySwipeNavigation />);
+    const panel = screen.container.appendChild(document.createElement("div"));
+    for (const [deltaX, deltaY] of [...events, [0, 0] as const]) {
+      panel.dispatchEvent(
+        new WheelEvent("wheel", { deltaX, deltaY, bubbles: true, composed: true }),
+      );
+    }
+
+    expect(navigateHistory).toHaveBeenCalledTimes(navigates ? 1 : 0);
   });
 });
