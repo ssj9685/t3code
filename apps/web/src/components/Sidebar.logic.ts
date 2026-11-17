@@ -264,31 +264,23 @@ type SidebarThreadDropPlan =
       readonly assignments: ReadonlyArray<{ readonly id: string; readonly orderKey: string }>;
     }
   | {
-      readonly kind: "pin";
-      readonly order: readonly string[];
-      readonly orderKey: string | undefined;
-      readonly extraAssignments: ReadonlyArray<{ readonly id: string; readonly orderKey: string }>;
-    }
-  | {
       readonly kind: "move-active";
       readonly order: readonly string[] | null;
       readonly assignments: ReadonlyArray<{ readonly id: string; readonly orderKey: string }>;
-      readonly unpin: boolean;
       readonly unsettle: boolean;
       readonly unsnooze: boolean;
     }
   | { readonly kind: "settle" };
 
-export type SidebarDropVerb = "pin" | "unpin" | "settle" | "unsettle" | "wake";
+export type SidebarDropVerb = "settle" | "unsettle" | "wake";
 
 export function resolveSidebarDropVerb(
   from: SidebarSection,
   to: SidebarSection | null,
 ): SidebarDropVerb | null {
   if (to === null || to === from || to === "working" || to === "snoozed") return null;
-  if (to === "pinned") return "pin";
+  if (from === "pinned" || to === "pinned") return null;
   if (to === "settled") return "settle";
-  if (from === "pinned") return "unpin";
   if (from === "settled") return "unsettle";
   return "wake";
 }
@@ -371,6 +363,7 @@ export function planSidebarThreadDrop(input: {
     activeReorderableKeys,
   } = input;
   if (activeSection === "working") return { kind: "none" };
+  if (activePinned !== (target.section === "pinned")) return { kind: "none" };
   if (input.supportsSettlement === false && (target.section === "settled" || activeSettled)) {
     return { kind: "none" };
   }
@@ -418,7 +411,6 @@ export function planSidebarThreadDrop(input: {
               kind: "move-active",
               order: null,
               assignments: [],
-              unpin: activePinned,
               unsettle: activeSettled,
               unsnooze: activeSection === "snoozed",
             };
@@ -437,7 +429,6 @@ export function planSidebarThreadDrop(input: {
         kind: "move-active",
         order,
         assignments,
-        unpin: activePinned,
         unsettle: activeSettled,
         unsnooze: activeSection === "snoozed",
       };
@@ -455,19 +446,9 @@ export function planSidebarThreadDrop(input: {
       }
       const assignments = arrange(order, pinnedKeysById, reorderableKeys);
       if (assignments === null) return { kind: "none" };
-      if (activeSection === "pinned") {
-        return assignments.length === 0
-          ? { kind: "none" }
-          : { kind: "reorder-pinned", order, assignments };
-      }
-      return {
-        kind: "pin",
-        order,
-        orderKey: assignments.find((assignment) => assignment.id === activeKey)?.orderKey,
-        extraAssignments: activePinned
-          ? assignments
-          : assignments.filter((assignment) => assignment.id !== activeKey),
-      };
+      return assignments.length === 0
+        ? { kind: "none" }
+        : { kind: "reorder-pinned", order, assignments };
     }
   }
 }
@@ -966,6 +947,7 @@ export function groupSidebarThreadsByProject<
   return folders.filter((folder) => folder.threads.length > 0 || keepEmpty(folder.group));
 }
 
+// Shelves keep the first thread's priority for each project, including across environments.
 export type SidebarV2TopStatusKind =
   | "approval"
   | "done"
